@@ -18,6 +18,7 @@ This project is publicly shared under the **GNU General Public License v3.0 (GPL
 
 **Commercial licensing inquiries:** [amerkj999@gmail.com]
 Work in progress — feedback welcome
+Author: Roman Chernyaev, 12 y.o., self-taught, Moscow Region, Russia.
 
 ---
 
