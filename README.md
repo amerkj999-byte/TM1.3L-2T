@@ -17,6 +17,7 @@ This project is publicly shared under the **GNU General Public License v3.0 (GPL
 - The author reserves all patent and design rights.
 
 **Commercial licensing inquiries:** [amerkj999@gmail.com]
+Work in progress — feedback welcome
 
 ---
 
