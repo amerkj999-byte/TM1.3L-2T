@@ -1,6 +1,6 @@
 # TURBO MONSTER 1.3L TRIPLE
 
-**385 HP | 1.3L | Two-Stroke Turbo | Direct Injection | Reactive Thrust Control**
+**374 HP | 1.3L | Two-Stroke Turbo | Direct Injection | Reactive Thrust Control**
 
 A complete digital twin of a high-performance two-stroke turbo engine, designed as a power unit for a hypothetical **Group SB (Safety-B)** rally car — a modern, safe evolution of the legendary Group B era.
 
@@ -35,11 +35,11 @@ Requires C++17 or later. No external dependencies.
 | Reactive thrust | 34 kgf @ 584 km/h (8.2 HP equivalent at peak) |
 | Torque | 211.7 Nm @ 12,500 RPM |
 | Displacement | 1,296 cm³ |
-| Specific output | **296 HP/liter** |
+| Specific output | **288 HP/liter** |
 | Weight (engine + gearbox) | ~175 kg |
-| Power-to-weight ratio | 0.45 kg/HP |
+| Power-to-weight ratio | 0.47 kg/HP |
 | Fuel | 65% AI-100 + 35% Methanol (M65 blend) |
-| Trapping efficiency | 88.9% (CFD-verified, two-chamber Helmholtz resonator) |
+| Trapping efficiency | **58.0%** (2D CFD-verified, two-chamber Helmholtz resonator) |
 | Peak EGT | 1,150°C |
 | Max boost | 1.35 bar (absolute) |
 | Lifespan (race mode) | 10–15 hours |
@@ -54,7 +54,6 @@ Requires C++17 or later. No external dependencies.
 - `src/` — C++ source code for all simulation modules
 - `logs/` — Complete simulation output with peak power data
 - `calculations/` — Jet thrust power calculation (solver formulas)
-- `logs/` — Complete simulation output with peak power data and raw log screenshot
 
 ---
 
@@ -62,15 +61,16 @@ Requires C++17 or later. No external dependencies.
 
 - **Turbine power:** Thermodynamics vs. BEMT analysis — deviation 4.1%
 - **Piston pin stress:** FEA (970 MPa) vs. analytical (962 MPa) — deviation 0.8%
-- **Trapping efficiency:** Blair model (77.3%) vs. CFD with resonator (88.9%)
+- **Trapping efficiency:** 2D CFD (LIAM solver, Chorin projection method) with geometry correction factor ×0.72 (4 scavenging ports × 25° vs 1 exhaust port × 70°) — **58.0% trapping**
+- **Estimated 3D trapping:** 55–62% (2D overestimates by 3–7% due to uncaptured 3D short-circuiting effects)
 - [📊 View convergence plot](docs/convergence.png)
-*CFD solver convergence history — LIAM solver, Chorin projection method.*
+*CFD solver convergence history — LIAM solver, 5000 nodes, 1000 iterations, residual = 0.09*
 
 ---
 
 ## ⚙️ KEY TECHNOLOGIES
 
-- **Two-chamber Helmholtz resonator** expanding trapping efficiency to 88.9%
+- **Two-chamber Helmholtz resonator** increasing trapping efficiency from ~52% (baseline) to **58.0%** (+6% gain)
 - **Active reactive thrust system** controlled by a heel pressure sensor ("Akkela algorithm")
 - **C/SiC composite valve** for the reactive thrust channel (T_max = 1,450°C)
 - **Oil-cooled ALS injector** with coaxial cooling jacket (regenerative cooling principle)
