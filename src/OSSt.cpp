@@ -22,7 +22,7 @@ const double ETA_COMP    = 0.78;        // КПД компрессора (ули
 const double ETA_TURB    = 0.85;        // КПД турбины
 const double ETA_MECH    = 0.92;        // Механический КПД
 const double COMB_EFF    = 0.95;        // Эффективность сгорания (прямой впрыск)
-const double SCAV_EFF    = 0.92;        // Эффективность продувки (базовая)
+const double SCAV_EFF    = 0.58;        // Эффективность продувки (базовая)
 
 // ТОПЛИВО: 65% АИ-100 + 35% МЕТАНОЛ
 const double LHV_GASOLINE   = 43000000.0;  // Дж/кг (АИ-100)
