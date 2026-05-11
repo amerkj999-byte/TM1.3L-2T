@@ -32,7 +32,7 @@ Requires C++17 or later. No external dependencies.
 |-----------|-------|
 | **Peak system power** | **261.102 kW (355 HP)** |
 | Engine power (crankshaft) | 253,747 kW (345 HP) @ 12,500 RPM |
-| Reactive thrust | 34 kgf @ 584 km/h (no aerodynamic drag) (8.2 HP equivalent at peak) |
+| Reactive thrust | 30.1 kgf @ 230 km/h (25.3 HP equivalent at peak) |
 | Torque | 211.7 Nm @ 12,500 RPM |
 | Displacement | 1,296 cm³ |
 | Specific output | **273 HP/liter** |
