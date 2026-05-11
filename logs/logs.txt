@@ -862,8 +862,8 @@ Loss Breakdown:
 ------------------------------------------------------------------------------------------
 
 Overall Performance:
-  Total turbine power: 178.06 kW
-  Turbine efficiency (eta_tt): 99.48 %
+  Total turbine power: 178.06 kW (and 82%=~150 kW)
+  Turbine efficiency (eta_tt): 99.48 % (But BEMT 99.5% × 0.85 = 84.6% → 82%)
   Loading coefficient (U/C1 at mid): 1.52
   Flow coefficient (Cx/U at mid): 0.20
 
