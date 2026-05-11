@@ -54,6 +54,7 @@ Requires C++17 or later. No external dependencies.
 - `src/` — C++ source code for all simulation modules
 - `logs/` — Complete simulation output with peak power data
 - `calculations/` — Jet thrust power calculation (solver formulas)
+- `logs/` — Complete simulation output with peak power data and raw log screenshot
 
 ---
 
@@ -62,7 +63,7 @@ Requires C++17 or later. No external dependencies.
 - **Turbine power:** Thermodynamics vs. BEMT analysis — deviation 4.1%
 - **Piston pin stress:** FEA (970 MPa) vs. analytical (962 MPa) — deviation 0.8%
 - **Trapping efficiency:** Blair model (77.3%) vs. CFD with resonator (88.9%)
-- [📊 View convergence plot](convergence.png)
+- [📊 View convergence plot](docs/convergence.png)
 *CFD solver convergence history — LIAM solver, Chorin projection method.*
 
 ---
