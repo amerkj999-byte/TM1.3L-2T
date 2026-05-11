@@ -62,6 +62,8 @@ Requires C++17 or later. No external dependencies.
 - **Turbine power:** Thermodynamics vs. BEMT analysis — deviation 4.1%
 - **Piston pin stress:** FEA (970 MPa) vs. analytical (962 MPa) — deviation 0.8%
 - **Trapping efficiency:** Blair model (77.3%) vs. CFD with resonator (88.9%)
+- ![Convergence plot](docs/convergence.png)
+*CFD solver convergence history — LIAM solver, Chorin projection method.*
 
 ---
 
