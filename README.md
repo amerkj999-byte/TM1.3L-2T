@@ -1,6 +1,6 @@
 # TURBO MONSTER 1.3L TRIPLE
 
-**355 HP | 1.3L | Two-Stroke Turbo | Direct Injection | Reactive Thrust Control**
+**430 HP | 1.3L | Two-Stroke Turbo | Direct Injection | Reactive Thrust Control**
 
 A complete digital twin of a high-performance two-stroke turbo engine, designed as a power unit for a hypothetical **Group SB (Safety-B)** rally car — a modern, safe evolution of the legendary Group B era.
 
