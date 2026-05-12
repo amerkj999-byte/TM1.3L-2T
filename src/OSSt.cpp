@@ -105,7 +105,6 @@ public:
         if (rpm > 5000.0) vol_eff = 0.90 - 0.10 * ((rpm - 5000.0) / 4500.0);
         vol_eff = std::max(0.50, std::min(0.95, vol_eff));
         double m_dot_air = V_disp * (rpm / 60.0) * rho_air * vol_eff * SCAV_EFF;
-        
         // Целевое AFR по режимам
         // Целевое AFR для смеси 65% АИ-100 + 35% метанол
 double lambda_target = 1.0;
@@ -157,6 +156,16 @@ public:
     
     double compute(double m_dot_exhaust, double T_exhaust, double P_exhaust,
                    double P_ambient, double m_dot_air, double T_ambient, double dt) {
+        
+        if (m_dot_exhaust < 0.0001) {
+            turbine_power = 0.0;
+            compressor_power = 0.0;
+            shaft_speed_target = 0.0;
+            shaft_speed += (shaft_speed_target - shaft_speed) * dt / (1.0 + dt);
+            boost_pressure += (P_ambient - boost_pressure) * 0.1;
+            return boost_pressure;
+        }
+        
         // Турбина
         double PR_turb = P_exhaust / P_ambient;
         if (PR_turb < 1.05) PR_turb = 1.05;
@@ -164,6 +173,14 @@ public:
         double T_out_isentropic = T_exhaust * pow(1.0 / PR_turb, (GAMMA - 1.0) / GAMMA);
         double ideal_turb_power = m_dot_exhaust * CP_GAS * (T_exhaust - T_out_isentropic);
         turbine_power = ideal_turb_power * ETA_TURB;
+
+        // ОТЛАДКА
+static int tc_debug_count = 0;
+if (tc_debug_count++ % 5000 == 0) {
+    printf("TC-DEBUG: m_exh=%.4f T_exh=%.0f P_exh=%.0f P_amb=%.0f m_air=%.4f T_amb=%.0f turb_pow=%.1f wg_pos=%.2f wg_bleed=%.3f\n",
+           m_dot_exhaust, T_exhaust, P_exhaust, P_ambient, m_dot_air, T_ambient,
+           turbine_power, wastegate_position, 0.0);
+}
         
 // ==========================================
 // УТОЧНЁННАЯ МОДЕЛЬ ВЕСТГЕЙТА GTX3582R
@@ -228,7 +245,7 @@ if (wastegate_position > 0.0) {
 turbine_power *= (1.0 - wg_bleed * 0.85); // 85% эффективность перепуска
         
         // Компрессор
-        double PR_comp_target = 1.0 + 8.0 * (turbine_power / 178000.0);
+        double PR_comp_target = 1.0 + 8.0 * (turbine_power / 150000.0);
         PR_comp_target = std::min(4.5, PR_comp_target);
         
         double T_comp_out_isentropic = T_ambient * pow(PR_comp_target, (GAMMA - 1.0) / GAMMA);
@@ -245,8 +262,13 @@ turbine_power *= (1.0 - wg_bleed * 0.85); // 85% эффективность пе
         boost_pressure = std::max(P_ambient, std::min(MAX_BOOST, boost_pressure));
         
         // Скорость вала турбины (упрощённо)
-        shaft_speed_target = 20000.0 + 220000.0 * (turbine_power / 178000.0);
+        shaft_speed_target = 20000.0 + 220000.0 * (turbine_power / 150000.0);
         shaft_speed_target = std::min(280000.0, shaft_speed_target);
+
+        // Инерция ротора турбины
+double tau_turbo = 0.85 + 0.40 * (1.0 - wastegate_position);
+double alpha_turbo = dt / (tau_turbo + dt);
+shaft_speed += (shaft_speed_target - shaft_speed) * alpha_turbo;
         
         return boost_pressure;
     }
@@ -301,11 +323,32 @@ public:
         m_dot_air = m_dot_theoretical * delivery_ratio;
         
         // Коэффициент захвата (зависит от фаз и резонатора)
-        trapping_efficiency = 0.62 * resonator_effect; // Базовый + влияние резонатора
-        trapping_efficiency = std::min(0.92, trapping_efficiency);
+// CFD-обоснованный trapping efficiency (данные VIAM SCAVENGING CFD)
+trapping_efficiency = 0.58 * resonator_effect; // База 58% из CFD при 12500 RPM
+trapping_efficiency = std::min(0.85, trapping_efficiency);
         m_dot_trapped = m_dot_air * trapping_efficiency;
         scavenging_efficiency = trapping_efficiency / delivery_ratio;
         volumetric_efficiency = m_dot_trapped / m_dot_theoretical;
+
+                // ===== ОГРАНИЧЕНИЕ ПО ВОЗДУХУ =====
+        // Нельзя захватить больше воздуха чем его подаётся
+        if (m_dot_trapped > m_dot_air) {
+            m_dot_trapped = m_dot_air;
+            trapping_efficiency = m_dot_trapped / m_dot_air;
+        }
+        
+        // Ограничение топлива по фактически захваченному воздуху
+        double max_fuel_by_air = m_dot_trapped / (AFR_STOICH_BLEND * 0.65); // λ=0.65 минимум
+        if (fuel_flow_kgs > max_fuel_by_air) {
+            fuel_flow_kgs = max_fuel_by_air;
+        }
+        
+        // --- ТОПЛИВОВОЗДУШНАЯ СМЕСЬ ---
+        if (fuel_flow_kgs > 1e-12 && m_dot_trapped > 1e-12) {
+            AFR = m_dot_trapped / fuel_flow_kgs;
+        } else {
+            AFR = 99.0;
+        }
         
         // --- ТОПЛИВОВОЗДУШНАЯ СМЕСЬ ---
         if (fuel_flow_kgs > 1e-12 && m_dot_trapped > 1e-12) {
@@ -404,15 +447,59 @@ public:
         double n_exp = 1.28;
         double T_exhaust_ideal = T_peak * pow(1.0 / COMP_RATIO, n_exp - 1.0);
         T_exhaust = T_exhaust_ideal * 0.7 + T_peak * 0.15;
+        
         if (fuel_flow_kgs < 1e-6) {
-    T_exhaust = T_ambient + 50;  // нет горения — выхлоп чуть теплее впуска
-    m_dot_exhaust = m_dot_air;   // только воздух
-}
-        T_exhaust = std::max(400.0, std::min(1473.0, T_exhaust));  // Холоднее выхлоп
-        P_exhaust = P_ambient * 1.03 + boost_pressure * 0.07;
-        m_dot_exhaust = m_dot_air + fuel_flow_kgs;
-    }
-};
+            T_exhaust = T_ambient + 50;
+            m_dot_exhaust = m_dot_air;
+        } else {
+            m_dot_exhaust = m_dot_air;
+        }
+        
+        if (fuel_flow_kgs < 0.002) {
+            T_exhaust = std::max(400.0, std::min(800.0, T_exhaust));
+        } else if (fuel_flow_kgs < 0.005) {
+            T_exhaust = std::max(400.0, std::min(1100.0, T_exhaust));
+        } else {
+            T_exhaust = std::max(400.0, std::min(1473.0, T_exhaust));
+        }
+        
+        double m_dot_exhaust_corrected = m_dot_exhaust * sqrt(T_exhaust) / (boost_pressure + 0.001);
+        double turbine_flow_capacity = 2.75e-5;
+        double pressure_ratio_turbine = 1.0 + (m_dot_exhaust_corrected / turbine_flow_capacity);
+        
+        P_exhaust = P_ambient * pressure_ratio_turbine;
+        P_exhaust *= 1.03;
+        P_exhaust = std::max(P_ambient * 1.02, std::min(MAX_BOOST * 1.5, P_exhaust));
+        
+        double P_ratio_te = P_exhaust / boost_pressure;
+        if (P_ratio_te > 0.45) {
+            double te_cfd = 0.58 - 0.085 * (P_ratio_te - 0.45);
+            trapping_efficiency = std::max(0.15, std::min(0.58, te_cfd));
+        }
+        trapping_efficiency *= resonator_effect;
+        trapping_efficiency = std::min(0.85, trapping_efficiency);
+        m_dot_trapped = m_dot_air * trapping_efficiency;
+        scavenging_efficiency = trapping_efficiency / delivery_ratio;
+        volumetric_efficiency = m_dot_trapped / m_dot_theoretical;
+        
+        double scavenge_pressure_diff = boost_pressure - P_exhaust;
+        double pumping_loss_power = 0.0;
+        
+        if (scavenge_pressure_diff < 0.0) {
+            double pumping_loss_fraction = fabs(scavenge_pressure_diff) / boost_pressure * 0.25;
+            pumping_loss_power = indicated_power * pumping_loss_fraction;
+            indicated_power -= pumping_loss_power;
+            brake_power = indicated_power - friction_power;
+            brake_power = std::max(0.0, brake_power);
+            if (rpm > 10.0) {
+                torque = brake_power / (rpm * M_PI / 30.0);
+            }
+            BMEP_Pa = brake_power * 2.0 / (V_disp * (rpm / 60.0));
+            BMEP_bar = BMEP_Pa / 1e5;
+        }
+    }  // <-- ЗАКРЫВАЮЩАЯ СКОБКА compute()
+};   // <-- ЗАКРЫВАЮЩАЯ СКОБКА КЛАССА TwoStrokeThermo
+
 
 // ============================================================================
 // PIEZO-BOOST-CONTROL (датчики на резонаторе → клапан на впуске)
@@ -1001,8 +1088,15 @@ if (step % 500 == 0) { // Только раз в 0.1 сек
             // ==========================================
             // 4. ОСНОВНАЯ ЛОГИКА ALS (ПРИОРИТЕТНАЯ)
             // ==========================================
-            bool als_condition_spool = (driver_throttle > 0.85 && boost < 1.5e5 && rpm > 3000.0 && T_engine_block > 340.0);
+            bool als_condition_spool = (driver_throttle > 0.85 && boost < 1.8e5 && rpm > 4000.0 && T_engine_block > 330.0);
             bool als_condition_decel = (throttle_chopped && T_engine_block > 340.0 && T_oil_actual < 388.0);
+
+            if (T4_actual > 1373.0) { // 1100°C
+    anti_lag_active = false;
+    anti_lag_fuel = 0.0;
+    anti_lag_air_bypass = 0.0;
+    wastegate_position = 0.3; // Открыть вестгейт для охлаждения
+}
             
             if (T_oil_actual > 388.0) {
                 // Термозащита ALS
@@ -1195,6 +1289,19 @@ if (std::isnan(fuel_flow) || std::isinf(fuel_flow)) {
 if (fuel_flow > 0.100) { // Физический предел 100 г/с (три форсунки по 33 г/с)
     fuel_flow = 0.065;   // Отсечка по максимуму
 }
+            // Детект аномального роста T4 — отключение ALS
+            if (T4_actual > 1473.0 && als_continuous_seconds > 3.0) {
+                anti_lag_active = false;
+                anti_lag_fuel *= 0.3;
+                anti_lag_air_bypass = 0.0;
+            }
+            
+            // Обогащение при высокой EGT
+            if (T4_actual > 1523.0) {
+                fuel_flow *= 1.20;
+                spark_advance -= 5.0;
+                spark_advance = std::max(5.0, spark_advance);
+            }
 
 if (rpm > 50.0 && fuel_flow > 0.00001) {
     thermo.spark_advance_local = spark_advance;
@@ -1208,7 +1315,7 @@ if (rpm > 50.0 && fuel_flow > 0.00001) {
     thermo.brake_power = 0.0;
     thermo.torque = 0.0;
     thermo.m_dot_exhaust = 0.0;
-    thermo.T_exhaust = T4_actual;
+    T4_actual = std::max(500.0, std::min(1500.0, thermo.T_exhaust));
 }
 
 // ===== NaN-ЗАЩИТА ТЕРМОДИНАМИКИ =====
@@ -1256,25 +1363,12 @@ if (std::isnan(P_turb) || std::isinf(P_turb)) {
 }
 
 boost = turbo.compute(m_dot_turb, T_turb, P_turb, atmos.pressure, m_dot_air, atmos.temperature, dt);
-
-// Инерция ротора турбины
-double tau_turbo = 0.85 + 0.40 * (1.0 - wastegate_position);  // GTX3071R
-double alpha_turbo = dt / (tau_turbo + dt);
-turbo.shaft_speed += (turbo.shaft_speed_target - turbo.shaft_speed) * alpha_turbo;
-// Буст из реальных оборотов турбины
-double PR_from_rpm = 1.0 + 3.5 * pow(turbo.shaft_speed / 240000.0, 2.0);
-PR_from_rpm = std::min(4.5, PR_from_rpm);
-boost = atmos.pressure * PR_from_rpm;
-boost = std::max(atmos.pressure * 0.85, std::min(MAX_BOOST, boost));
+// shaft_speed уже обновлён внутри compute(), boost возвращён compute()
 // ===== ГЛОБАЛЬНАЯ ЗАЩИТА ОТ NaN В БУСТЕ =====
 if (std::isnan(boost) || std::isinf(boost)) {
     boost = atmos.pressure; // Сброс до атмосферного
 }
-                
-                // Быстрый наддув при закрытом вестгейте
-                if (wastegate_position > 0.9 && boost < 2.0e5) {
-                    boost += (2.0e5 - boost) * 0.1;
-                }
+    
 // if (wastegate_position < 0.1 && boost > 1.3e5) {
 //     boost -= (boost - 1.3e5) * 0.1;
 // }
@@ -1356,7 +1450,8 @@ if (engine_running) {
     } else {
         T_pre_turb = T_manifold_wall;
     }
-    T_pre_turb = std::min(1423.0, T_pre_turb);  // ПРЕДЕЛ 1550K (1280°C) — турбина GTX
+    // T_pre_turb — без жёсткого ограничения, пусть физика решает
+// T_pre_turb = std::min(1423.0, T_pre_turb);  // УБРАТЬ ЖЁСТКОЕ ОГРАНИЧЕНИЕ
 
     // Падение на турбине
     double PR_turb = thermo.P_exhaust / atmos.pressure;
@@ -1365,11 +1460,11 @@ if (engine_running) {
     
     // ========== ГЛАВНЫЙ ФИКС: T4_actual ПОЛУЧАЕТ T_pre_turb ==========
     T4_actual = T_pre_turb;  // ВОТ ОНО! БЫЛО ПОТЕРЯНО!
-    // Аварийное охлаждение турбины топливом
-if (T4_actual > 1250.0 && fuel_flow > 0.01) {
-    fuel_flow *= 1.15; // +15% топлива для охлаждения
-    T4_actual -= (T4_actual - 1250.0) * 0.3; // Мгновенное снижение EGT
-}
+    T4_actual = T_pre_turb;
+// Реалистичный EGT от нагрузки (дублируем логику из термодинамики)
+if (fuel_flow < 0.001) T4_actual = std::max(500.0, std::min(700.0, T4_actual));
+else if (fuel_flow < 0.005) T4_actual = std::max(500.0, std::min(1100.0, T4_actual));
+else T4_actual = std::max(500.0, std::min(1500.0, T4_actual));
     T4_actual = std::max(500.0, std::min(1500.0, T4_actual));  // ГРАНИЦЫ
     
     // Термическая инерция двигателя (оставляем как есть — это норм)
@@ -1467,6 +1562,21 @@ if (std::isnan(thermo.torque) || std::isinf(thermo.torque)) {
             double jet_power = 0.0;
             double m_dot_jet_fuel = 0.0;
             
+            // Сначала собираем несгоревшее топливо из цилиндров
+            double unburned_from_cylinders = 0.0;
+            if (engine_running && fuel_flow > 0.0001) {
+                // AFR из термодинамики
+                double AFR_actual = thermo.AFR;
+                double AFR_min = AFR_STOICH_BLEND * 0.65; // минимальная лямбда для сгорания
+                
+                if (AFR_actual < AFR_min && AFR_actual > 1.0) {
+                    // Смесь слишком богатая — есть несгоревшее топливо
+                    double fuel_burned = thermo.m_dot_trapped / AFR_min;
+                    unburned_from_cylinders = fuel_flow - fuel_burned;
+                    if (unburned_from_cylinders < 0.0) unburned_from_cylinders = 0.0;
+                }
+            }
+            
             if (anti_lag_active) {
                 if (driver_throttle < 0.1) {
                     m_dot_jet_fuel = fuel_flow * 0.50;  // сброс газа — 50% в реактив
@@ -1474,7 +1584,15 @@ if (std::isnan(thermo.torque) || std::isinf(thermo.torque)) {
                     m_dot_jet_fuel = fuel_flow * 0.15;  // разгон — 15% в реактив
                 }
                 
-                double m_dot_jet_air = m_dot_jet_fuel * 5.0;
+                // Добавляем несгоревшее топливо из цилиндров
+                m_dot_jet_fuel += unburned_from_cylinders * 0.7; // 70% догорает в выхлопе
+            } else {
+                // ALS выключен, но несгоревшее топливо всё равно работает
+                m_dot_jet_fuel = unburned_from_cylinders * 0.7;
+            }
+            
+            if (m_dot_jet_fuel > 0.0001) {
+                double m_dot_jet_air = m_dot_jet_fuel * 5.0; // AFR ~5:1 для догорания
                 double m_dot_jet = m_dot_jet_fuel + m_dot_jet_air;
                 
                 double T_jet = T4_actual;
@@ -1482,15 +1600,19 @@ if (std::isnan(thermo.torque) || std::isinf(thermo.torque)) {
                 double v_jet = 0.7 * c_jet;
                 double F_impulse = m_dot_jet * v_jet;
                 
-                double p_jet = boost * 0.9;
+                double p_jet = thermo.P_exhaust * 0.9;
                 double F_pressure = (p_jet - atmos.pressure) * 0.00102;
                 if (F_pressure < 0) F_pressure = 0;
                 
                 double jet_thrust_force = F_impulse + F_pressure;
                 jet_power = jet_thrust_force * gearbox.vehicle_speed;
-                if (fuel_flow < 0.001) {
-    jet_power = 0.0; // Нет топлива — нет реактивной тяги
-}
+                
+                // Логируем для отладки
+                if (step % 500 == 0 && jet_power > 100.0) {
+                    printf("JET: fuel=%.1fg/s thrust=%.0fN power=%.1fkW AFR=%.1f\n",
+                           m_dot_jet_fuel*1000, jet_thrust_force, jet_power/1000.0, thermo.AFR);
+                }
+                
                 P_shaft += jet_power;
             }
 // Обратная связь: RPM от скорости колёс (сцепление замкнуто)
@@ -1523,41 +1645,35 @@ if (gearbox.current_gear >= 1 && !gearbox.shifting && engine_running) {
             // 14. ВЫВОД
             // ==========================================
             if (step % 500 == 0) {
-                printf("%6.1f | %5.0f | %4.2f | %4.0f | %7.2f | %8.1f | %8.1f | G%d %3.0fkm/h | %s\n",
-       t, rpm, boost/1e5, T4_actual - 273.15,
-       fuel_flow*1000, P_shaft/1000.0, thermo.torque, 
-       gearbox.current_gear, gearbox.vehicle_speed * 3.6, mode_str);
+                printf("%6.1f | %5.0f | %4.2f | %4.0f | %7.2f | %8.1f | %8.1f | G%d %3.0fkm/h | %s | TC:%4.0f | Pex:%.2f\n",
+                       t, rpm, boost/1e5, T4_actual - 273.15,
+                       fuel_flow*1000, P_shaft/1000.0, thermo.torque, 
+                       gearbox.current_gear, gearbox.vehicle_speed * 3.6, mode_str,
+                       turbo.shaft_speed / 1000.0, thermo.P_exhaust / 1e5);
             }
             
             // ==========================================
             // 15. АВАРИЙНЫЕ ОСТАНОВЫ
             // ==========================================
             if (rpm > RPM_MAX * 1.05) { printf("\n!!! OVERSPEED %.0f RPM !!!\n", rpm); break; }
-            // if (T_oil_actual > 413.0) { printf("\n!!! OIL OVERHEAT %.0f°C !!!\n", T_oil_actual - 273.15); break; }
-            // if (T4_actual > 1500.0) { printf("!!! EGT OVERHEAT %.0f°C !!!\n", T4_actual - 273.15); break; }
         }
         
         printf("-----------------------------------------------------------------\n");
         printf("Simulation complete. Engine %s\n", engine_running ? "RUNNING" : "STOPPED");
-        printf("Final: %.0f RPM | %.2f bar boost | %.0f°C EGT | %.1f kW (%.0f HP)\n",
+        printf("Final: %.0f RPM | %.2f bar boost | %.0fC EGT | %.1f kW (%.0f HP)\n",
                rpm, boost/1e5, T4_actual - 273.15, P_shaft/1000.0, P_shaft/745.7);
-        printf("Engine block: %.0f°C | Oil: %.0f°C\n",
+        printf("Engine block: %.0fC | Oil: %.0fC\n",
                T_engine_block - 273.15, T_oil_actual - 273.15);
         
-        print_resource_report();  // <-- ВОТ ЭТО НОВАЯ СТРОКА
+        print_resource_report();
         double jet_max_power = 0.0;
         gearbox.print_report();
     }
 
-    // ==========================================
-    // ФУНКЦИЯ РАСЧЁТА РЕСУРСА (ИСПРАВЛЕННАЯ)
-    // ==========================================
     void calculate_fatigue(double dt, double P_peak, double T_peak, double T_oil, 
                            double rpm, bool als_active, double boost) {
         
-        // УСКОРЕННОЕ ВРЕМЯ: 1 секунда симуляции = 3 минуты жизни мотора (180x)
         double dt_scaled = dt * 180.0;
-        
         double P_factor = P_peak / 2.6e7;
         double T_factor = T_peak / 2600.0;
         double RPM_factor = rpm / RPM_MAX;
@@ -1565,49 +1681,34 @@ if (gearbox.current_gear >= 1 && !gearbox.shifting && engine_running) {
         total_running_hours += dt_scaled / 3600.0;
         total_revolutions += rpm * dt_scaled / 60.0;
         
-        // Поршни
-        double piston_wear_rate = 0.0005 * 
-            exp(2.0 * T_factor) * exp(1.5 * P_factor) * 
-            (1.0 + 2.0 * RPM_factor * RPM_factor);
+        double piston_wear_rate = 0.0005 * exp(2.0 * T_factor) * exp(1.5 * P_factor) * (1.0 + 2.0 * RPM_factor * RPM_factor);
         if (als_active) piston_wear_rate *= 5.0;
         fatigue_pistons += piston_wear_rate * dt_scaled / 3600.0;
         
-        // Турбина
         double T4 = T4_actual - 273.15;
-        double turbo_wear_rate = (T4 > 650.0) ? 
-            0.0003 * exp((T4 - 650.0) / 80.0) : 0.0001;
-        if (als_active && T4 > 750.0) turbo_wear_rate *= 8.0;
+        double turbo_wear_rate = 0.00005;
+        if (T4 > 800.0) turbo_wear_rate = 0.0003 * exp((T4 - 800.0) / 200.0);
+        if (als_active && T4 > 900.0) turbo_wear_rate *= 3.0;
+        turbo_wear_rate = std::min(0.002, turbo_wear_rate);
         fatigue_turbo += turbo_wear_rate * dt_scaled / 3600.0;
         
-        // Подшипники
-        double bearing_wear_rate = 0.0004 * RPM_factor * RPM_factor * 
-            (1.0 + 0.5 * P_factor) * 
-            (1.0 + 0.02 * (T_oil - 80.0) * (T_oil > 80.0 ? 1.0 : 0.0));
+        double bearing_wear_rate = 0.0004 * RPM_factor * RPM_factor * (1.0 + 0.5 * P_factor) * (1.0 + 0.02 * (T_oil - 80.0) * (T_oil > 80.0 ? 1.0 : 0.0));
         fatigue_bearings += bearing_wear_rate * dt_scaled / 3600.0;
         
-        // Шатуны
         double rod_wear_rate = 0.0002 * exp(3.0 * RPM_factor) * (1.0 + P_factor);
         if (rpm > 8500.0) rod_wear_rate *= 3.0;
         if (rpm > 9000.0) rod_wear_rate *= 5.0;
         fatigue_rods += rod_wear_rate * dt_scaled / 3600.0;
         
-        // Счётчик ALS-активаций (правильный: только по фронту)
-        if (als_active && !prev_als_state) {
-            als_events += 1.0;
-        }
+        if (als_active && !prev_als_state) als_events += 1.0;
         prev_als_state = als_active;
         
-        // Гоночные часы
-        double avg_fatigue = (fatigue_pistons + fatigue_turbo + fatigue_bearings + fatigue_rods) / 4.0;
-        race_hours_equivalent = avg_fatigue * 50.0;
+        race_hours_equivalent = (fatigue_pistons + fatigue_turbo + fatigue_bearings + fatigue_rods) / 4.0 * 50.0;
     }
-    // ==========================================
-        // ==========================================
-    // ФУНКЦИЯ ВЫВОДА ОТЧЁТА О РЕСУРСЕ (ВСТАВИТЬ СЮДА)
-    // ==========================================
+
     void print_resource_report() {
         printf("\n=============================================================\n");
-        printf("    RESOURCE REPORT — TURBO MONSTER 1.3L TRIPLE\n");
+        printf("    RESOURCE REPORT - TURBO MONSTER 1.3L TRIPLE\n");
         printf("=============================================================\n");
         
         double piston_hours_left = (1.0 - fatigue_pistons) * 50.0;
@@ -1625,21 +1726,15 @@ if (gearbox.current_gear >= 1 && !gearbox.shifting && engine_running) {
             return "REPLACE NOW!";
         };
         
-        printf("Pistons            | %5.1f%%  | %8.1f h | %s\n", 
-               fatigue_pistons*100, piston_hours_left, status(piston_hours_left));
-        printf("Turbocharger       | %5.1f%%  | %8.1f h | %s\n", 
-               fatigue_turbo*100, turbo_hours_left, status(turbo_hours_left));
-        printf("Main Bearings      | %5.1f%%  | %8.1f h | %s\n", 
-               fatigue_bearings*100, bearing_hours_left, status(bearing_hours_left));
-        printf("Connecting Rods    | %5.1f%%  | %8.1f h | %s\n", 
-               fatigue_rods*100, rod_hours_left, status(rod_hours_left));
+        printf("Pistons            | %5.1f%%  | %8.1f h | %s\n", fatigue_pistons*100, piston_hours_left, status(piston_hours_left));
+        printf("Turbocharger       | %5.1f%%  | %8.1f h | %s\n", fatigue_turbo*100, turbo_hours_left, status(turbo_hours_left));
+        printf("Main Bearings      | %5.1f%%  | %8.1f h | %s\n", fatigue_bearings*100, bearing_hours_left, status(bearing_hours_left));
+        printf("Connecting Rods    | %5.1f%%  | %8.1f h | %s\n", fatigue_rods*100, rod_hours_left, status(rod_hours_left));
         printf("-------------------+---------+------------+----------\n");
         
-        double weakest_hours = std::min({piston_hours_left, turbo_hours_left, 
-                                         bearing_hours_left, rod_hours_left});
-        double hours_per_race = 0.5;
-        double races_remaining = weakest_hours / hours_per_race;
-        double races_completed = race_hours_equivalent / hours_per_race;
+        double weakest_hours = std::min({piston_hours_left, turbo_hours_left, bearing_hours_left, rod_hours_left});
+        double races_remaining = weakest_hours / 0.5;
+        double races_completed = race_hours_equivalent / 0.5;
         
         printf("\nTotal running time: %.2f hours\n", total_running_hours);
         printf("Race hours equivalent: %.2f hours\n", race_hours_equivalent);
@@ -1657,21 +1752,15 @@ if (gearbox.current_gear >= 1 && !gearbox.shifting && engine_running) {
         else if (weakest_hours > 1) printf("WARNING. Rebuild recommended.\n");
         else printf("CRITICAL. REBUILD NOW!\n");
 
-        // ==========================================
-        // АКУСТИЧЕСКИЙ ОТЧЁТ
-        // ==========================================
-        double L_exh_baseline = 115.0;
-        double L_als_peak = 146.0;
-        double L_max = anti_lag_active ? L_als_peak : L_exh_baseline;
+        double L_max = anti_lag_active ? 146.0 : 115.0;
         printf("\n=== ACOUSTIC REPORT ===\n");
         printf("Peak exhaust noise: %.1f dB @ 1m\n", L_max);
-        printf("Estimated noise @ 1km: %.1f dB\n", L_max - 60.0 - 15.0);
+        printf("Estimated noise @ 1km: %.1f dB\n", L_max - 75.0);
         if (L_max > 150.0) printf("WARNING: Noise level EXCEEDS human pain threshold (130 dB)\n");
         if (L_max > 160.0) printf("WARNING: Noise level at eardrum RUPTURE threshold\n");
         printf("ALS events: %.0f | Total ALS time: %.1f sec\n", als_events, als_continuous_seconds);
         printf("=============================================================\n");
     }
-    // ==========================================
 };
 
 int main() {
