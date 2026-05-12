@@ -30,16 +30,16 @@ Requires C++17 or later. No external dependencies.
 
 | Parameter | Value |
 |-----------|-------|
-| **Peak system power** | **261.102 kW (355 HP)** |
-| Engine power (crankshaft) | 253,747 kW (345 HP) @ 12,500 RPM |
-| Reactive thrust | 30.1 kgf @ 230 km/h (25.3 HP equivalent at peak) |
-| Torque | 211.7 Nm @ 12,500 RPM |
+| **Peak system power** | **320.5 kW (436 HP)** |
+| Engine power (crankshaft) | 318 kW (426 HP) @ 10,700 RPM |
+| Reactive thrust | 107 N @ 250 km/h (10 HP equivalent at peak) |
+| Torque | 284.0 Nm @ 10,700 RPM |
 | Displacement | 1,296 cm³ |
-| Specific output | **273 HP/liter** |
+| Specific output | **328 HP/liter** |
 | Weight (engine + gearbox) | ~175 kg |
 | Power-to-weight ratio | 0.49 kg/HP |
 | Fuel | 65% AI-100 + 35% Methanol (M65 blend) |
-| Trapping efficiency | **58.0%** (2D CFD-verified, two-chamber Helmholtz resonator) |
+| Trapping efficiency | **58.0%-40.0%** (2D CFD-verified, two-chamber Helmholtz resonator) |
 | Peak EGT | 1,150°C |
 | Max boost | 1.35 bar (absolute) |
 | Lifespan (race mode) | 10–15 hours |
