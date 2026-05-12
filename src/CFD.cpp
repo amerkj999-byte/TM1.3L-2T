@@ -20,10 +20,10 @@ const int NUM_BLADES = 11;
 const double T_IN = 1423.0;         // K
 const double P_IN = 480000.0;       // Па (3.6 бар)
 const double P_OUT = 140000.0;      // Па (1.6 бар)
-const double MASS_FLOW = 0.40;     // кг/с
+const double MASS_FLOW = 0.35; // для 12500 RPM (уже есть)
 
 // Геометрия колеса
-const double TIP_RADIUS = 0.068;    // м (136/2 мм)
+const double TIP_RADIUS = 0.060;    // м (136/2 мм)
 const double HUB_RADIUS = 0.017;    // м (34/2 мм)
 
 // Параметры соплового аппарата
