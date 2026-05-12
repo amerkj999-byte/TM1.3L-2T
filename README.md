@@ -41,7 +41,7 @@ Requires C++17 or later. No external dependencies.
 | Fuel | 65% AI-100 + 35% Methanol (M65 blend) |
 | Trapping efficiency | **58.0%-40.0%** (2D CFD-verified, two-chamber Helmholtz resonator) |
 | Peak EGT | 1,150°C |
-| Max boost | 1.35 bar (absolute) |
+| Max boost | 4.56 bar (absolute) |
 | Lifespan (race mode) | 10–15 hours |
 | Lifespan (endurance) | 300–400 hours |
 
