@@ -35,7 +35,7 @@ Requires C++17 or later. No external dependencies.
 | Reactive thrust | 70N @ 250 km/h (6.5 HP equivalent at peak) |
 | Torque | 284.0 Nm @ 10,700 RPM |
 | Displacement | 1,296 cm³ |
-| Specific output | **395 HP/liter** |
+| Specific output | **400 HP/liter** |
 | Weight (engine + gearbox) | ~195 kg |
 | Power-to-weight ratio | 0.38 kg/HP |
 | Fuel | 65% AI-100 + 35% Methanol (M65 blend) |
