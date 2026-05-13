@@ -1,6 +1,6 @@
 # TURBO MONSTER 1.3L TRIPLE
 
-**430 HP | 1.3L | Two-Stroke Turbo | Direct Injection | Reactive Thrust Control**
+**512 WHP | 1.3L | Two-Stroke Turbo | Direct Injection | Reactive Thrust Control**
 
 A complete digital twin of a high-performance two-stroke turbo engine, designed as a power unit for a hypothetical **Group SB (Safety-B)** rally car — a modern, safe evolution of the legendary Group B era.
 
@@ -30,18 +30,18 @@ Requires C++17 or later. No external dependencies.
 
 | Parameter | Value |
 |-----------|-------|
-| **Peak system power** | **320.5 kW (436 HP)** |
-| Engine power (crankshaft) | 318 kW (426 HP) @ 10,700 RPM |
-| Reactive thrust | 107 N @ 250 km/h (10 HP equivalent at peak) |
+| **Peak system power** | **435 kW (584 HP)** |
+| Engine power (crankshaft) | 382 kW (512 WHP) @ 10,700 RPM |
+| Reactive thrust | 70N @ 250 km/h (6.5 HP equivalent at peak) |
 | Torque | 284.0 Nm @ 10,700 RPM |
 | Displacement | 1,296 cm³ |
-| Specific output | **328 HP/liter** |
-| Weight (engine + gearbox) | ~175 kg |
-| Power-to-weight ratio | 0.49 kg/HP |
+| Specific output | **395 HP/liter** |
+| Weight (engine + gearbox) | ~195 kg |
+| Power-to-weight ratio | 0.38 kg/HP |
 | Fuel | 65% AI-100 + 35% Methanol (M65 blend) |
 | Trapping efficiency | **58.0%-40.0%** (2D CFD-verified, two-chamber Helmholtz resonator) |
 | Peak EGT | 1,150°C |
-| Max boost | 4.56 bar (absolute) |
+| Max boost | 4.62 bar (absolute) |
 | Lifespan (race mode) | 10–15 hours |
 | Lifespan (endurance) | 300–400 hours |
 
