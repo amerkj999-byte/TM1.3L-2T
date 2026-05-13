@@ -49,10 +49,31 @@ const double RPM_MAX      = 12500.0;
 const double RPM_IDLE     = 1800.0;
 
 // Турбонаддув (одна улитка) — ФОРСИРОВАН
-const double TURBO_TRIM   = 0.55;
-const double TURBO_A_R    = 0.60;
-const double MAX_BOOST    = 5.5e5;      // Па (3.0 бар абсолют = 2.0 бар избыток)
-const double WASTEGATE_CRACK = 4.6e5;   // Давление открытия вестгейта (позже)
+// --- LP турбина (GTX3582R) ---
+const double LP_TRIM     = 0.60;
+const double LP_A_R      = 0.82;
+const double LP_PR       = 2.1;          // Степень повышения давления LP
+const double LP_ETA_TURB = 0.77;         // КПД LP турбины
+const double LP_ETA_COMP = 0.78;         // КПД LP компрессора
+const double LP_RPM_MAX  = 100000.0;     // Максимальные обороты LP
+
+// --- HP турбина (GTX3071R) ---
+const double HP_TRIM     = 0.55;
+const double HP_A_R      = 0.63;
+const double HP_PR       = 2.17;         // Степень повышения давления HP
+const double HP_ETA_TURB = 0.75;         // КПД HP турбины
+const double HP_ETA_COMP = 0.76;         // КПД HP компрессора
+const double HP_RPM_MAX  = 130000.0;     // Максимальные обороты HP
+
+// --- Общие ---
+const double MAX_BOOST    = 5.5e5;       // Па (4.5 бар абс = 3.5 бар избытка)
+const double STAGE2_EFF   = 0.53;        // Общий КПД Stage 2
+const double WASTEGATE_CRACK = 3.0e5;    // Давление открытия вестгейта HP
+
+// Вестгейт HP турбины
+const double WG_CRACK_BOOST      = 1.5e5;  // Па избытка (1.5 бар) — начало открытия
+const double WG_FULL_OPEN_BOOST  = 3.0e5;  // Па избытка (3.0 бар) — полное открытие
+const double WG_HYSTERESIS       = 0.15e5; // Па (0.15 бар) — гистерезис
 
 // Пьезо-буст-контроль
 const double PIEZO_SENSITIVITY = 0.003; // В/Па
@@ -104,18 +125,22 @@ public:
         double vol_eff = 0.65 + 0.25 * (rpm / 5000.0);
         if (rpm > 5000.0) vol_eff = 0.90 - 0.10 * ((rpm - 5000.0) / 4500.0);
         vol_eff = std::max(0.50, std::min(0.95, vol_eff));
-        double m_dot_air = V_disp * (rpm / 60.0) * rho_air * vol_eff * SCAV_EFF;
-        // Целевое AFR по режимам
-        // Целевое AFR для смеси 65% АИ-100 + 35% метанол
-double lambda_target = 1.0;
-if (throttle > 0.95)      lambda_target = 0.78;  // Форсаж
-else if (throttle > 0.85) lambda_target = 0.82;  // Мощность
-else if (throttle > 0.70) lambda_target = 0.87;  // Спорт
-else if (throttle > 0.50) lambda_target = 0.93;  // Круиз
-else if (throttle > 0.20) lambda_target = 0.98;  // Эконом
-else                      lambda_target = 1.0;   // Холостой
-target_AFR = AFR_STOICH_BLEND * lambda_target;
-        
+
+            double m_dot_air = V_disp * (rpm / 60.0) * rho_air * vol_eff * SCAV_EFF;
+    
+    // Целевая лямбда — БОГАТАЯ для буста (метанол позволяет)
+    double boost_bar = (boost_pressure - 101325.0) / 1e5;
+    double lambda_target;
+    
+if (boost_bar > 3.0)       lambda_target = 0.45;  // AFR = 4.55
+else if (boost_bar > 2.0)  lambda_target = 0.50;  // AFR = 5.06
+else if (boost_bar > 1.0)  lambda_target = 0.58;  // AFR = 5.86
+else if (boost_bar > 0.5)  lambda_target = 0.70;  // AFR = 7.08
+else                       lambda_target = 0.85;  // AFR = 8.59
+
+if (throttle > 0.95) lambda_target = std::min(lambda_target, 0.42);  // Форсаж
+lambda_target = std::max(0.40, std::min(1.0, lambda_target));
+    target_AFR = AFR_STOICH_BLEND * lambda_target;
         double m_dot_fuel_needed = m_dot_air / target_AFR;
         
         // Предел форсунок (3 × 0.35 г/с = 1.05 г/с макс при 100% duty)
@@ -142,133 +167,117 @@ target_AFR = AFR_STOICH_BLEND * lambda_target;
 };
 
 // ============================================================================
-// TURBOCHARGER (ОДНА УЛИТКА, ВЕСТГЕЙТ, УЧЁТ ИНЕРЦИИ)
+// STAGE 2 COMPOUND TURBOCHARGER (LP: GTX3582R + HP: GTX3071R)
 // ============================================================================
 class Turbocharger {
 public:
     double boost_pressure = 101325.0;
-    double compressor_power = 0.0;
-    double turbine_power = 0.0;
-    double shaft_speed = 0.0;        // об/мин
-    double shaft_speed_target = 0.0;
-    double I_turbo = 0.00035;        // кг·м² (ротор GTX3071R)
-    double wastegate_position = 1.0; // 0-1 (1=закрыт)
+    double boost_pressure_interstage = 101325.0;
+    double lp_compressor_power = 0.0;
+    double hp_compressor_power = 0.0;
+    double lp_turbine_power = 0.0;
+    double hp_turbine_power = 0.0;
+    double lp_shaft_speed = 0.0;
+    double hp_shaft_speed = 0.0;
+    double wastegate_position = 1.0;
+    double intercooler_efficiency = 0.85;
     
     double compute(double m_dot_exhaust, double T_exhaust, double P_exhaust,
                    double P_ambient, double m_dot_air, double T_ambient, double dt) {
         
         if (m_dot_exhaust < 0.0001) {
-            turbine_power = 0.0;
-            compressor_power = 0.0;
-            shaft_speed_target = 0.0;
-            shaft_speed += (shaft_speed_target - shaft_speed) * dt / (1.0 + dt);
+            lp_turbine_power = 0.0;
+            hp_turbine_power = 0.0;
+            lp_compressor_power = 0.0;
+            hp_compressor_power = 0.0;
             boost_pressure += (P_ambient - boost_pressure) * 0.1;
+            boost_pressure_interstage = P_ambient;
+            lp_shaft_speed *= 0.98;
+            hp_shaft_speed *= 0.98;
             return boost_pressure;
         }
         
-        // Турбина
-        double PR_turb = P_exhaust / P_ambient;
-        if (PR_turb < 1.05) PR_turb = 1.05;
+        // ==================== HP ТУРБИНА (первая в потоке) ====================
+        double T_out_hp_isentropic = T_exhaust * pow(1.0 / HP_PR, (GAMMA - 1.0) / GAMMA);
+        double ideal_hp_turb_power = m_dot_exhaust * CP_GAS * (T_exhaust - T_out_hp_isentropic) * 0.50;
+        hp_turbine_power = ideal_hp_turb_power * HP_ETA_TURB;
         
-        double T_out_isentropic = T_exhaust * pow(1.0 / PR_turb, (GAMMA - 1.0) / GAMMA);
-        double ideal_turb_power = m_dot_exhaust * CP_GAS * (T_exhaust - T_out_isentropic);
-        turbine_power = ideal_turb_power * ETA_TURB;
-
-        // ОТЛАДКА
-static int tc_debug_count = 0;
-if (tc_debug_count++ % 5000 == 0) {
-    printf("TC-DEBUG: m_exh=%.4f T_exh=%.0f P_exh=%.0f P_amb=%.0f m_air=%.4f T_amb=%.0f turb_pow=%.1f wg_pos=%.2f wg_bleed=%.3f\n",
-           m_dot_exhaust, T_exhaust, P_exhaust, P_ambient, m_dot_air, T_ambient,
-           turbine_power, wastegate_position, 0.0);
-}
+        double T_between = T_exhaust - (T_exhaust - T_out_hp_isentropic) * HP_ETA_TURB * 0.50;
+        double P_between = P_exhaust / HP_PR;
         
-// ==========================================
-// УТОЧНЁННАЯ МОДЕЛЬ ВЕСТГЕЙТА GTX3582R
-// ==========================================
-
-// Параметры пружины вестгейта
-const double WG_SPRING_FORCE = 45.0;    // Н (усилие пружины при cracking)
-const double WG_VALVE_AREA = 0.000804;   // м² (π * 0.016² для клапана 32 мм)
-const double WG_CRACK_BOOST = 1.5e5;     // Па избытка (1.5 бар) — начало открытия
-const double WG_FULL_OPEN_BOOST = 3.0e5; // Па избытка (3.0 бар) — полное открытие
-const double WG_HYSTERESIS = 0.15e5;     // Па (0.15 бар) — гистерезис
-
-// Текущее избыточное давление в коллекторе
-double boost_gauge = boost_pressure - P_ambient;
-if (boost_gauge < 0.0) boost_gauge = 0.0;
-
-// Учёт противодавления выхлопа (помогает открывать клапан)
-double p_exhaust_help = P_exhaust - P_ambient;
-if (p_exhaust_help < 0.0) p_exhaust_help = 0.0;
-
-// Суммарное усилие на клапан (давление наддува + противодавление)
-double opening_pressure = boost_gauge + p_exhaust_help * 0.3; // 30% от противодавления
-
-// Расчёт положения клапана с гистерезисом
-double wg_target = 0.0;
-if (opening_pressure > WG_CRACK_BOOST) {
-    // Клапан открывается (прямой ход)
-    wg_target = (opening_pressure - WG_CRACK_BOOST) / (WG_FULL_OPEN_BOOST - WG_CRACK_BOOST);
-    wg_target = std::max(0.0, std::min(1.0, wg_target));
-} else if (wastegate_position < 0.05) {
-    // Клапан уже закрыт
-    wg_target = 0.0;
-} else if (boost_gauge < WG_CRACK_BOOST - WG_HYSTERESIS) {
-    // Клапан закрывается (обратный ход с гистерезисом)
-    wg_target = 0.0;
-}
-
-// Инерция клапана (не может двигаться мгновенно)
-double wg_time_constant = 0.05; // 50 мс — время полного хода
-if (fabs(wg_target - wastegate_position) > 0.01) {
-    double wg_alpha = dt / (wg_time_constant + dt);
-    wastegate_position += (wg_target - wastegate_position) * wg_alpha;
-}
-
-// Расход через вестгейт (нелинейная зависимость от положения)
-double wg_bleed = 0.0;
-if (wastegate_position > 0.0) {
-    // Площадь проходного сечения вестгейта (клапан 32 мм)
-    double wg_area = WG_VALVE_AREA * wastegate_position;
-    
-    // Расход через вестгейт (упрощённо — пропорционально площади и давлению)
-    double wg_mass_flow = wg_area * sqrt(2.0 * (P_exhaust - P_ambient) / 1.225) * 0.7;
-    
-    // Доля газа, проходящего мимо турбины
-    if (m_dot_exhaust > 0.001) {
-        wg_bleed = wg_mass_flow / (m_dot_exhaust + wg_mass_flow);
-    }
-    wg_bleed = std::max(0.0, std::min(0.7, wg_bleed)); // Максимум 70% в обход
-}
-
-// Потери мощности турбины от перепуска
-turbine_power *= (1.0 - wg_bleed * 0.85); // 85% эффективность перепуска
+        // ==================== LP ТУРБИНА (вторая в потоке) ====================
+        double T_out_lp_isentropic = T_between * pow(1.0 / LP_PR, (GAMMA - 1.0) / GAMMA);
+        double ideal_lp_turb_power = m_dot_exhaust * CP_GAS * (T_between - T_out_lp_isentropic);
+        lp_turbine_power = ideal_lp_turb_power * LP_ETA_TURB;
         
-        // Компрессор
-        double PR_comp_target = 1.0 + 8.0 * (turbine_power / 150000.0);
-        PR_comp_target = std::min(4.5, PR_comp_target);
+        // ==================== КОМПРЕССОРЫ ====================
         
-        double T_comp_out_isentropic = T_ambient * pow(PR_comp_target, (GAMMA - 1.0) / GAMMA);
-        compressor_power = m_dot_air * CP_AIR * (T_comp_out_isentropic - T_ambient) / ETA_COMP;
+        // LP компрессор (атмосфера → промежуточное давление)
+        double PR_lp_comp = LP_PR;
+        double T_comp_out_lp_isentropic = T_ambient * pow(PR_lp_comp, (GAMMA - 1.0) / GAMMA);
+        lp_compressor_power = m_dot_air * CP_AIR * (T_comp_out_lp_isentropic - T_ambient) / LP_ETA_COMP;
         
-        // Баланс мощностей
-        double P_ratio = 1.0;
-        if (compressor_power > turbine_power + 1.0) {
-            P_ratio = turbine_power / (compressor_power + 0.01);
-            PR_comp_target = 1.0 + (PR_comp_target - 1.0) * P_ratio;
+        // Интеркулер
+        double T_after_intercooler = T_ambient + (T_comp_out_lp_isentropic - T_ambient) * (1.0 - intercooler_efficiency);
+        boost_pressure_interstage = P_ambient * PR_lp_comp;
+        
+        // HP компрессор (промежуточное → конечное давление)
+        double PR_hp_comp_target = 1.0 + 3.5 * (hp_turbine_power / 120000.0);
+        PR_hp_comp_target = std::min(HP_PR, std::max(1.2, PR_hp_comp_target));
+        
+        double T_comp_out_hp_isentropic = T_after_intercooler * pow(PR_hp_comp_target, (GAMMA - 1.0) / GAMMA);
+        hp_compressor_power = m_dot_air * CP_AIR * (T_comp_out_hp_isentropic - T_after_intercooler) / HP_ETA_COMP;
+        
+        // ==================== БАЛАНС МОЩНОСТЕЙ ====================
+        double total_turbine_power = lp_turbine_power + hp_turbine_power;
+        double total_compressor_power = lp_compressor_power + hp_compressor_power;
+        
+        if (total_compressor_power > total_turbine_power + 1.0) {
+            double P_ratio = total_turbine_power / (total_compressor_power + 0.01);
+            PR_hp_comp_target = 1.0 + (PR_hp_comp_target - 1.0) * P_ratio;
         }
         
-        boost_pressure = P_ambient * PR_comp_target;
+        double PR_total = PR_lp_comp * PR_hp_comp_target;
+        boost_pressure = P_ambient * PR_total;
         boost_pressure = std::max(P_ambient, std::min(MAX_BOOST, boost_pressure));
         
-        // Скорость вала турбины (упрощённо)
-        shaft_speed_target = 20000.0 + 220000.0 * (turbine_power / 150000.0);
-        shaft_speed_target = std::min(280000.0, shaft_speed_target);
-
-        // Инерция ротора турбины
-double tau_turbo = 0.85 + 0.40 * (1.0 - wastegate_position);
-double alpha_turbo = dt / (tau_turbo + dt);
-shaft_speed += (shaft_speed_target - shaft_speed) * alpha_turbo;
+        // ==================== ВЕСТГЕЙТ (HP турбина) ====================
+        double boost_gauge = boost_pressure - P_ambient;
+        if (boost_gauge < 0.0) boost_gauge = 0.0;
+        
+        double wg_target = 1.0;
+        if (boost_gauge > WG_CRACK_BOOST) {
+            wg_target = 1.0 - (boost_gauge - WG_CRACK_BOOST) / (WG_FULL_OPEN_BOOST - WG_CRACK_BOOST);
+            wg_target = std::max(0.1, std::min(1.0, wg_target));
+        }
+        
+        double wg_time_constant = 0.05;
+        double wg_alpha = dt / (wg_time_constant + dt);
+        wastegate_position += (wg_target - wastegate_position) * wg_alpha;
+        
+        double wg_bleed = (1.0 - wastegate_position) * 0.85;
+        hp_turbine_power *= (1.0 - wg_bleed);
+        
+        // ==================== СКОРОСТИ ВАЛОВ ====================
+        double lp_speed_target = 30000.0 + 80000.0 * (lp_turbine_power / 80000.0);
+        lp_speed_target = std::min(LP_RPM_MAX, std::max(20000.0, lp_speed_target));
+        double lp_alpha = dt / (0.5 + dt);
+        lp_shaft_speed += (lp_speed_target - lp_shaft_speed) * lp_alpha;
+        
+        double hp_speed_target = 40000.0 + 100000.0 * (hp_turbine_power / 90000.0);
+        hp_speed_target = std::min(HP_RPM_MAX, std::max(30000.0, hp_speed_target));
+        double hp_alpha = dt / (0.4 + dt);
+        hp_shaft_speed += (hp_speed_target - hp_shaft_speed) * hp_alpha;
+        
+        // ==================== ОТЛАДКА ====================
+        static int tc_debug_count = 0;
+        if (tc_debug_count++ % 5000 == 0) {
+            printf("STAGE2: LP:%.0fkRPM/%.1fkW HP:%.0fkRPM/%.1fkW | Total turb:%.1fkW comp:%.1fkW | boost:%.2fbar | WG:%.0f%%\n",
+                   lp_shaft_speed/1000.0, lp_turbine_power/1000.0,
+                   hp_shaft_speed/1000.0, hp_turbine_power/1000.0,
+                   (lp_turbine_power+hp_turbine_power)/1000.0, (lp_compressor_power+hp_compressor_power)/1000.0,
+                   boost_pressure/1e5, wastegate_position*100.0);
+        }
         
         return boost_pressure;
     }
@@ -1059,7 +1068,7 @@ if (dead_pedal_pressure > 0.05) {
     als_fuel_needed *= dead_pedal_pressure;
     
     // --- ШАГ 5: Ограничения ---
-    const double ALS_INJ_MAX = 0.025;
+    const double ALS_INJ_MAX = 0.062;
     if (als_fuel_needed > ALS_INJ_MAX) als_fuel_needed = ALS_INJ_MAX;
     if (als_fuel_needed < 0.0) als_fuel_needed = 0.0;
     
@@ -1186,8 +1195,8 @@ double AFR_target = AFR_STOICH_BLEND * lambda_target;
             double fuel_correction = rpm_error * Kp + rpm_error_integral * Ki;
 
             // Принудительное ограничение скважности
-if (fuel_demand > 0.057) {
-    fuel_demand = 0.057; // 57 г/с — жёсткий потолок
+if (fuel_demand > 0.0177) {
+    fuel_demand = 0.177; //  г/с — жёсткий потолок
 }
 // И добавить защиту по времени:
 if (fuel_flow > 0.050 && time_at_max_fuel > 5.0) {
@@ -1645,11 +1654,11 @@ if (gearbox.current_gear >= 1 && !gearbox.shifting && engine_running) {
             // 14. ВЫВОД
             // ==========================================
             if (step % 500 == 0) {
-                printf("%6.1f | %5.0f | %4.2f | %4.0f | %7.2f | %8.1f | %8.1f | G%d %3.0fkm/h | %s | TC:%4.0f | Pex:%.2f\n",
+                printf("%6.1f | %5.0f | %4.2f | %4.0f | %7.2f | %8.1f | %8.1f | G%d %3.0fkm/h | %s | TC:%3.0fk | Pex:%.2f\n",
                        t, rpm, boost/1e5, T4_actual - 273.15,
                        fuel_flow*1000, P_shaft/1000.0, thermo.torque, 
                        gearbox.current_gear, gearbox.vehicle_speed * 3.6, mode_str,
-                       turbo.shaft_speed / 1000.0, thermo.P_exhaust / 1e5);
+                       turbo.lp_shaft_speed/1000.0, turbo.hp_shaft_speed/1000.0, thermo.P_exhaust / 1e5);
             }
             
             // ==========================================
