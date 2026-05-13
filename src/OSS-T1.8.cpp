@@ -937,76 +937,200 @@ cable_segment(f, pipe3_mid, pipe3_end, pipe3_r, 18);
                             {b2.x, b2.y + (turbo_pipe_r+0.004f)*sinf(ang2), b2.z + (turbo_pipe_r+0.004f)*cosf(ang2)}, 0.0015f, 6);
         }
     }
-    
-    // ======================================================================
-    // 7. ТУРБОКОМПРЕССОР — GTX3582R (обновление)
-    // Компрессор: 82 мм, турбина: 68 мм, 11 лопаток
-    // ======================================================================
-    float tc_x = turbo_end.x;
-    float tc_r = 0.071f;    // радиус улитки компрессора (82 мм → 164 мм диаметр)
-    float tc_r_turb = 0.060f; // радиус турбины (68 мм → 136 мм диаметр)
-    
-    // Приёмный патрубок турбины (увеличен)
-    cylinder_hollow(f, tc_x - 0.020f, tc_x + 0.020f, turbo_pipe_r*1.5f + 0.012f, turbo_pipe_r*1.5f, 28, turbo_end.y, turbo_end.z);
-    
-    // Улитка турбины
-    cylinder_hollow(f, tc_x, tc_x + 0.055f, tc_r_turb, tc_r_turb - 0.008f, 36, turbo_end.y, turbo_end.z);
+// ======================================================================
+// 7. STAGE 2 — LP: GTX3582R + HP: GTX3071R (Compound Turbo)
+// LP компрессор: 82 мм, LP турбина: 68 мм
+// HP компрессор: 71 мм, HP турбина: 60 мм
+// Общий PR: 4.55 (3.55 бар избытка)
+// BEMT-оптимизировано: LP 100k RPM, HP 130k RPM
+// ======================================================================
 
-    // Переходник GTX3582R (конус от фланца к улитке)
-    cylinder_hollow(f, tc_x - 0.006f, tc_x, turbo_pipe_r*1.5f + 0.012f, turbo_pipe_r*1.35f + 0.010f, 28, turbo_end.y, turbo_end.z);
-    
-    // Лопатки турбины (11 шт, увеличенный размах)
-    for(int b = 0; b < 11; b++) {
-        float ang = b * (360.0f/11.0f) * (float)M_PI / 180.0f;
-        cable_segment(f, {tc_x + 0.018f, turbo_end.y + tc_r_turb*0.22f*sinf(ang), turbo_end.z + tc_r_turb*0.22f*cosf(ang)},
-                        {tc_x + 0.035f, turbo_end.y + tc_r_turb*0.88f*sinf(ang), turbo_end.z + tc_r_turb*0.88f*cosf(ang)}, 0.0035f, 10);
-    }
-    
-    // Вал турбокомпрессора (усиленный)
-    float shaft_tc_x = tc_x + 0.045f;
-    cylinder_hollow(f, shaft_tc_x, shaft_tc_x + 0.055f, 0.010f, 0.0f, 20, turbo_end.y, turbo_end.z);
-    
-    // Улитка компрессора (82 мм)
-    float comp_x = shaft_tc_x + 0.055f;
-    cylinder_hollow(f, comp_x, comp_x + 0.040f, tc_r, 0.010f, 32, turbo_end.y, turbo_end.z);
-    
-    // Лопатки компрессора (10 шт, splitter — 6+6)
-    for(int b = 0; b < 12; b++) {
-        float ang = b * 30.0f * (float)M_PI / 180.0f;
-        bool is_splitter = (b % 2 == 1);  // каждая вторая — сплиттер
-        float r_start = is_splitter ? 0.018f : 0.012f;
-        float r_end   = is_splitter ? 0.052f : 0.058f;
-        cable_segment(f, {comp_x + 0.010f, turbo_end.y + r_start*sinf(ang), turbo_end.z + r_start*cosf(ang)},
-                        {comp_x + 0.032f, turbo_end.y + r_end*sinf(ang), turbo_end.z + r_end*cosf(ang)}, 0.0025f, 10);
-    }
-    
-    // Выходной патрубок компрессора (увеличен)
-    float comp_out_x = comp_x + 0.040f;
-    cylinder_hollow(f, comp_out_x - 0.006f, comp_out_x + 0.006f, 0.030f, 0.024f, 20, turbo_end.y, turbo_end.z);
-    
-     // ======================================================================
-    // 8. ИНТЕРКУЛЕР (сдвинут вверх: ic_y = 0.18 вместо 0.10)
-    // ======================================================================
-    float ic_x = comp_out_x + 0.05f, ic_y = 0.18f, ic_z = intake_z_offset;
+// ==================== LP ТУРБИНА (GTX3582R) ====================
+float lp_x = turbo_end.x;                          // позиция LP турбины
+float lp_r_comp = 0.082f;                          // компрессор LP (82 мм)
+float lp_r_turb = 0.068f;                          // турбина LP (68 мм)
 
-    // Корпус интеркулера
-    for(float t : {0.0f, 0.003f}) {
-        P ic1 = {ic_x, ic_y - 0.04f, ic_z - 0.02f};
-        P ic2 = {ic_x + 0.15f, ic_y - 0.04f, ic_z - 0.02f};
-        P ic3 = {ic_x + 0.15f, ic_y + 0.04f, ic_z - 0.02f};
-        P ic4 = {ic_x, ic_y + 0.04f, ic_z - 0.02f};
-        P ic5 = {ic_x, ic_y - 0.04f, ic_z + 0.02f};
-        P ic6 = {ic_x + 0.15f, ic_y - 0.04f, ic_z + 0.02f};
-        P ic7 = {ic_x + 0.15f, ic_y + 0.04f, ic_z + 0.02f};
-        P ic8 = {ic_x, ic_y + 0.04f, ic_z + 0.02f};
-        fct(f, ic1, ic2, ic3); fct(f, ic1, ic3, ic4);
-        fct(f, ic5, ic7, ic6); fct(f, ic5, ic8, ic7);
-        fct(f, ic1, ic5, ic6); fct(f, ic1, ic6, ic2);
-        fct(f, ic3, ic7, ic8); fct(f, ic3, ic8, ic4);
-        fct(f, ic1, ic4, ic8); fct(f, ic1, ic8, ic5);
-        fct(f, ic2, ic6, ic7); fct(f, ic2, ic7, ic3);
-    }
-    cable_segment(f, {comp_out_x, turbo_end.y, turbo_end.z}, {ic_x, ic_y, ic_z}, 0.015f);
+// Приёмный патрубок LP (получает газ от HP турбины)
+cylinder_hollow(f, lp_x - 0.016f, lp_x + 0.016f, turbo_pipe_r*1.25f + 0.008f, turbo_pipe_r*1.25f, 28, turbo_end.y, turbo_end.z);
+
+// Улитка LP турбины (A/R 0.82 — свободнее для низкого давления)
+cylinder_hollow(f, lp_x, lp_x + 0.052f, lp_r_turb, lp_r_turb - 0.008f, 36, turbo_end.y, turbo_end.z);
+
+// Переходник LP
+cylinder_hollow(f, lp_x - 0.005f, lp_x, turbo_pipe_r*1.25f + 0.008f, turbo_pipe_r*1.15f + 0.006f, 28, turbo_end.y, turbo_end.z);
+
+// Язык LP улитки (A/R 0.82, ALPHA1 72°)
+float lp_tongue_x = lp_x + 0.005f;
+float lp_tongue_r = lp_r_turb * 0.78f;
+float lp_tongue_angle = 72.0f * (float)M_PI / 180.0f;
+for(int t = 0; t < 4; t++) {
+    float t_frac = t / 3.0f;
+    float r_t = lp_tongue_r + t_frac * (lp_r_turb - lp_tongue_r) * 0.25f;
+    float ang_t = lp_tongue_angle + t_frac * 0.12f;
+    float y_t = turbo_end.y + r_t * sinf(ang_t);
+    float z_t = turbo_end.z + r_t * cosf(ang_t);
+    cable_segment(f, 
+        {lp_tongue_x + t_frac * 0.005f, y_t, z_t},
+        {lp_tongue_x + t_frac * 0.005f + 0.0025f, y_t + 0.0015f * sinf(ang_t), z_t + 0.0015f * cosf(ang_t)},
+        0.0020f * (1.0f - t_frac * 0.4f), 8);
+}
+
+// Лопатки LP турбины (11 шт, 68 мм, оптимизированы под 100k RPM)
+for(int b = 0; b < 11; b++) {
+    float ang = b * (360.0f/11.0f) * (float)M_PI / 180.0f;
+    float r_hub = lp_r_turb * 0.28f;
+    float r_mid = lp_r_turb * 0.60f;
+    float r_tip = lp_r_turb * 0.88f;
+    
+    float x1 = lp_x + 0.020f;
+    float r1 = r_hub + (r_mid - r_hub) * 0.15f;
+    float y1 = turbo_end.y + r1 * sinf(ang + 0.122f);
+    float z1 = turbo_end.z + r1 * cosf(ang + 0.122f);
+    
+    float x2 = lp_x + 0.040f;
+    float r2 = r_tip * 0.94f;
+    float y2 = turbo_end.y + r2 * sinf(ang - 0.070f);
+    float z2 = turbo_end.z + r2 * cosf(ang - 0.070f);
+    
+    cable_segment(f, {x1, y1, z1}, {x2, y2, z2}, 0.0042f, 12);
+}
+
+// Вал LP
+float lp_shaft_x = lp_x + 0.045f;
+cylinder_hollow(f, lp_shaft_x, lp_shaft_x + 0.058f, 0.013f, 0.0f, 24, turbo_end.y, turbo_end.z);
+
+// Компрессор LP (82 мм)
+float lp_comp_x = lp_shaft_x + 0.058f;
+cylinder_hollow(f, lp_comp_x, lp_comp_x + 0.042f, lp_r_comp, 0.010f, 32, turbo_end.y, turbo_end.z);
+
+// Лопатки LP компрессора (14 шт, 82 мм)
+for(int b = 0; b < 14; b++) {
+    float ang = b * (360.0f/14.0f) * (float)M_PI / 180.0f;
+    bool is_splitter = (b % 2 == 1);
+    float r_start = is_splitter ? 0.020f : 0.014f;
+    float r_end   = is_splitter ? 0.058f : 0.066f;
+    cable_segment(f, {lp_comp_x + 0.010f, turbo_end.y + r_start*sinf(ang), turbo_end.z + r_start*cosf(ang)},
+                    {lp_comp_x + 0.034f, turbo_end.y + r_end*sinf(ang), turbo_end.z + r_end*cosf(ang)}, 0.0028f, 10);
+}
+
+// ==================== HP ТУРБИНА (GTX3071R) ====================
+float hp_x = lp_comp_x + 0.080f;                   // HP после LP компрессора
+float hp_r_comp = 0.071f;                          // компрессор HP (71 мм)
+float hp_r_turb = 0.060f;                          // турбина HP (60 мм)
+
+// Приёмный патрубок HP (получает газ от двигателя)
+cylinder_hollow(f, hp_x - 0.020f, hp_x + 0.020f, turbo_pipe_r*1.5f + 0.012f, turbo_pipe_r*1.5f, 28, turbo_end.y, turbo_end.z);
+
+// Улитка HP турбины (A/R 0.63 — уменьшенный для высокого давления)
+cylinder_hollow(f, hp_x, hp_x + 0.048f, hp_r_turb, hp_r_turb - 0.006f, 36, turbo_end.y, turbo_end.z);
+
+// Переходник HP
+cylinder_hollow(f, hp_x - 0.006f, hp_x, turbo_pipe_r*1.5f + 0.012f, turbo_pipe_r*1.30f + 0.008f, 28, turbo_end.y, turbo_end.z);
+
+// Острый язык HP улитки (A/R 0.63, ALPHA1 68°)
+float hp_tongue_x = hp_x + 0.003f;
+float hp_tongue_r = hp_r_turb * 0.74f;
+float hp_tongue_angle = 68.0f * (float)M_PI / 180.0f;
+for(int t = 0; t < 4; t++) {
+    float t_frac = t / 3.0f;
+    float r_t = hp_tongue_r + t_frac * (hp_r_turb - hp_tongue_r) * 0.22f;
+    float ang_t = hp_tongue_angle + t_frac * 0.14f;
+    float y_t = turbo_end.y + r_t * sinf(ang_t);
+    float z_t = turbo_end.z + r_t * cosf(ang_t);
+    cable_segment(f, 
+        {hp_tongue_x + t_frac * 0.004f, y_t, z_t},
+        {hp_tongue_x + t_frac * 0.004f + 0.002f, y_t + 0.0015f * sinf(ang_t), z_t + 0.0015f * cosf(ang_t)},
+        0.0015f * (1.0f - t_frac * 0.5f), 8);
+}
+
+// Лопатки HP турбины (11 шт, 60 мм, оптимизированы под 130k RPM)
+for(int b = 0; b < 11; b++) {
+    float ang = b * (360.0f/11.0f) * (float)M_PI / 180.0f;
+    float r_hub = hp_r_turb * 0.25f;
+    float r_mid = hp_r_turb * 0.60f;
+    float r_tip = hp_r_turb * 0.88f;
+    
+    float x1 = hp_x + 0.018f;
+    float r1 = r_hub + (r_mid - r_hub) * 0.15f;
+    float y1 = turbo_end.y + r1 * sinf(ang + 0.122f);
+    float z1 = turbo_end.z + r1 * cosf(ang + 0.122f);
+    
+    float x2 = hp_x + 0.036f;
+    float r2 = r_tip * 0.94f;
+    float y2 = turbo_end.y + r2 * sinf(ang - 0.075f);
+    float z2 = turbo_end.z + r2 * cosf(ang - 0.075f);
+    
+    cable_segment(f, {x1, y1, z1}, {x2, y2, z2}, 0.0038f, 12);
+}
+
+// Вал HP
+float hp_shaft_x = hp_x + 0.042f;
+cylinder_hollow(f, hp_shaft_x, hp_shaft_x + 0.052f, 0.011f, 0.0f, 24, turbo_end.y, turbo_end.z);
+
+// Компрессор HP (71 мм)
+float hp_comp_x = hp_shaft_x + 0.052f;
+cylinder_hollow(f, hp_comp_x, hp_comp_x + 0.038f, hp_r_comp, 0.008f, 32, turbo_end.y, turbo_end.z);
+
+// Лопатки HP компрессора (12 шт, 71 мм)
+for(int b = 0; b < 12; b++) {
+    float ang = b * 30.0f * (float)M_PI / 180.0f;
+    bool is_splitter = (b % 2 == 1);
+    float r_start = is_splitter ? 0.016f : 0.010f;
+    float r_end   = is_splitter ? 0.048f : 0.054f;
+    cable_segment(f, {hp_comp_x + 0.008f, turbo_end.y + r_start*sinf(ang), turbo_end.z + r_start*cosf(ang)},
+                    {hp_comp_x + 0.030f, turbo_end.y + r_end*sinf(ang), turbo_end.z + r_end*cosf(ang)}, 0.0022f, 10);
+}
+
+// ==================== ВЫХОДНЫЕ ПАТРУБКИ ====================
+
+// Выход LP компрессора (идет в интеркулер, потом в HP компрессор)
+float lp_out_x = lp_comp_x + 0.042f;
+cylinder_hollow(f, lp_out_x - 0.006f, lp_out_x + 0.006f, 0.032f, 0.026f, 20, turbo_end.y, turbo_end.z);
+
+// Выход HP компрессора (идет в двигатель)
+float hp_out_x = hp_comp_x + 0.038f;
+cylinder_hollow(f, hp_out_x - 0.006f, hp_out_x + 0.006f, 0.028f, 0.022f, 20, turbo_end.y, turbo_end.z);
+
+// Выход LP турбины (в выхлоп)
+float lp_exit_x = lp_x + 0.052f;
+cylinder_hollow(f, lp_exit_x - 0.008f, lp_exit_x + 0.008f, 0.040f, 0.032f, 20, turbo_end.y, turbo_end.z);
+    
+// ======================================================================
+// 8. ИНТЕРКУЛЕР Stage 2 (LP компрессор → интеркулер → HP компрессор)
+// ======================================================================
+float ic_x = hp_comp_x - 0.10f;      // интеркулер перед HP компрессором
+float ic_y = 0.18f;                  // высота интеркулера
+float ic_z = intake_z_offset;        // Z от впуска
+
+// Выход LP компрессора
+float lp_comp_out_x_final = lp_comp_x + 0.042f;
+
+// Вход HP компрессора
+float hp_comp_in_x = hp_comp_x + 0.008f;
+
+// Корпус интеркулера
+for(float t : {0.0f, 0.003f}) {
+    P ic1 = {ic_x, ic_y - 0.04f, ic_z - 0.02f};
+    P ic2 = {ic_x + 0.15f, ic_y - 0.04f, ic_z - 0.02f};
+    P ic3 = {ic_x + 0.15f, ic_y + 0.04f, ic_z - 0.02f};
+    P ic4 = {ic_x, ic_y + 0.04f, ic_z - 0.02f};
+    P ic5 = {ic_x, ic_y - 0.04f, ic_z + 0.02f};
+    P ic6 = {ic_x + 0.15f, ic_y - 0.04f, ic_z + 0.02f};
+    P ic7 = {ic_x + 0.15f, ic_y + 0.04f, ic_z + 0.02f};
+    P ic8 = {ic_x, ic_y + 0.04f, ic_z + 0.02f};
+    fct(f, ic1, ic2, ic3); fct(f, ic1, ic3, ic4);
+    fct(f, ic5, ic7, ic6); fct(f, ic5, ic8, ic7);
+    fct(f, ic1, ic5, ic6); fct(f, ic1, ic6, ic2);
+    fct(f, ic3, ic7, ic8); fct(f, ic3, ic8, ic4);
+    fct(f, ic1, ic4, ic8); fct(f, ic1, ic8, ic5);
+    fct(f, ic2, ic6, ic7); fct(f, ic2, ic7, ic3);
+}
+
+// Трубопровод: выход LP компрессора → вход интеркулера
+cable_segment(f, {lp_comp_out_x_final, turbo_end.y, turbo_end.z}, {ic_x, ic_y, ic_z}, 0.015f);
+
+// Трубопровод: выход интеркулера → вход HP компрессора
+cable_segment(f, {ic_x + 0.15f, ic_y, ic_z}, {hp_comp_in_x, turbo_end.y, turbo_end.z}, 0.015f);
     
     // ======================================================================
     // 9. ВПУСКНАЯ СИСТЕМА (ресивер поднят: 0.19f вместо 0.11f)
