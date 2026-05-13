@@ -12,23 +12,23 @@ const double GAMMA_GAS = 1.35;      // показатель адиабаты
 const double R_GAS = 287.0;         // Дж/(кг·К)
 
 // Параметры турбины
-const double RPM = 240000.0;
+const double RPM = 160000.0;
 const double OMEGA = 2.0 * PI * RPM / 60.0;  // рад/с
 const int NUM_BLADES = 11;
 
 // Термодинамические параметры
 const double T_IN = 1423.0;         // K
-const double P_IN = 480000.0;       // Па (3.6 бар)
+const double P_IN = 450000.0;       // Па (3.6 бар)
 const double P_OUT = 140000.0;      // Па (1.6 бар)
-const double MASS_FLOW = 0.35; // для 12500 RPM (уже есть)
+const double MASS_FLOW = 0.42; // для 12500 RPM (уже есть)
 
 // Геометрия колеса
-const double TIP_RADIUS = 0.060;    // м (136/2 мм)
-const double HUB_RADIUS = 0.017;    // м (34/2 мм)
+const double TIP_RADIUS = 0.034;    // м (136/2 мм)
+const double HUB_RADIUS = 0.0095;    // м (34/2 мм)
 
 // Параметры соплового аппарата
-const double ALPHA1 = 72.0 * PI / 180.0;  // угол входа (рад)
-const double ETA_STATOR = 0.90;           // КПД соплового аппарата
+const double ALPHA1 = 65.0 * PI / 180.0;  // стоковая улитка Garrett GTX3071R
+const double ETA_STATOR = 0.92;           // КПД соплового аппарата
 
 // Структура для хранения параметров сечения
 struct SectionData {
@@ -93,7 +93,7 @@ void calculate_section(SectionData& sec, double delta_h_stator, double delta_h_r
     sec.U = OMEGA * sec.r;
     
     double C1_ideal = sqrt(2.0 * delta_h_stator);
-    sec.C1 = C1_ideal * sqrt(0.88);  // уточнённый КПД улитки (0.92 -> 0.84)
+    sec.C1 = C1_ideal * sqrt(0.85);
     
     sec.C_theta1 = sec.C1 * sin(ALPHA1);
     sec.C_x1 = sec.C1 * cos(ALPHA1);
@@ -102,37 +102,42 @@ void calculate_section(SectionData& sec, double delta_h_stator, double delta_h_r
     sec.beta1 = atan2(sec.W_theta1, sec.C_x1) * 180.0 / PI;
     
     sec.C_theta2 = 0.0;
-    sec.C_x2 = sec.C_x1 * 0.92;
+    sec.C_x2 = sec.C_x1 * 0.80;
     sec.W_theta2 = -sec.U;
     sec.W2 = sqrt(sec.U * sec.U + sec.C_x2 * sec.C_x2);
     sec.beta2 = atan2(sec.W_theta2, sec.C_x2) * 180.0 / PI;
     
     sec.delta_beta = fabs(sec.beta1 - sec.beta2);
-    
-    // Профильные потери
-    double t_max_over_c = 0.12;
-    sec.zeta_prof = 0.025 * (1.0 + 1.5 * pow(t_max_over_c, 2)) * 
-                    sec.sigma * pow(sec.W2 / (sec.W1 + 1e-9), 2);
-    
-    // Вторичные потери
-    sec.zeta_sec = 0.018 * sec.sigma * pow(sec.delta_beta / 100.0, 2);
-    
-    // Концевые потери (реальные)
-    double tip_clearance = 0.0005;
-    double blade_height = TIP_RADIUS - HUB_RADIUS;
-    double zeta_tip_clearance = 0.014 * (tip_clearance / blade_height) * sec.sigma;
-    double zeta_hub_vortex = 0.008 * sec.sigma * pow(sec.delta_beta / 100.0, 2);
-    
-    // Дисковое трение
-    double disk_friction_power = 14200.0;
-    double disk_fraction = sec.mass_frac;
-    double disk_loss = disk_friction_power * disk_fraction / 
-                       (sec.U * fabs(sec.C_theta1) * MASS_FLOW * sec.mass_frac + 1e-9);
-    
-    sec.zeta_total = sec.zeta_prof + sec.zeta_sec + 
-                     zeta_tip_clearance + zeta_hub_vortex + disk_loss;
-    sec.zeta_total = std::min(0.40, sec.zeta_total);
-    
+
+// Профильные потери (Ainley-Mathieson с поправкой на Re)
+double t_max_over_c = 0.12;
+double Re = fabs(sec.W1) * sec.chord / 2.5e-5;
+double Re_factor = pow(2e5 / (Re + 1e-9), 0.2);
+Re_factor = std::min(1.5, std::max(0.7, Re_factor));
+sec.zeta_prof = 0.018 * (1.0 + 1.2 * pow(t_max_over_c, 2)) * 
+                sec.sigma * pow(sec.W2 / (sec.W1 + 1e-9), 1.5) * Re_factor;
+
+// Вторичные потери (с учётом lean угла)
+double lean_angle = 7.0 * PI / 180.0;
+double lean_factor = 1.0 - 0.5 * sin(lean_angle);
+sec.zeta_sec = 0.014 * sec.sigma * pow(sec.delta_beta / 100.0, 2) * lean_factor;
+
+// Концевые потери
+double tip_clearance = 0.0003;
+double blade_height = TIP_RADIUS - HUB_RADIUS;
+double zeta_tip_clearance = 0.014 * (tip_clearance / blade_height) * sec.sigma;
+double zeta_hub_vortex = 0.008 * sec.sigma * pow(sec.delta_beta / 100.0, 2);
+
+// Дисковое трение
+double disk_friction_power = 11000.0;
+double disk_fraction = sec.mass_frac;
+double disk_loss = disk_friction_power * disk_fraction / 
+                   (sec.U * fabs(sec.C_theta1) * MASS_FLOW * sec.mass_frac + 1e-9);
+
+sec.zeta_total = sec.zeta_prof + sec.zeta_sec + 
+                 zeta_tip_clearance + zeta_hub_vortex + disk_loss;
+sec.zeta_total = std::min(0.30, sec.zeta_total);
+
     sec.eta_blade = 1.0 - sec.zeta_total;
     sec.Lu = sec.U * (sec.C_theta1 - sec.C_theta2) * sec.eta_blade;
     sec.power = sec.Lu * MASS_FLOW * sec.mass_frac;
@@ -247,45 +252,45 @@ void print_results_table(const std::vector<SectionData>& sections,
     std::vector<SectionData> initialize_sections() {
     std::vector<SectionData> sections(5);
     
-    // Сечение 1 (hub)
-    sections[0].r = 0.017;
-    sections[0].r_ratio = 0.25;
-    sections[0].chord = 0.018;
-    sections[0].s = 2.0 * PI * sections[0].r / NUM_BLADES;
-    sections[0].sigma = sections[0].chord / sections[0].s;
-    sections[0].mass_frac = 0.10;
-    
-    // Сечение 2
-    sections[1].r = 0.026;
-    sections[1].r_ratio = 0.38;
-    sections[1].chord = 0.020;
-    sections[1].s = 2.0 * PI * sections[1].r / NUM_BLADES;
-    sections[1].sigma = sections[1].chord / sections[1].s;
-    sections[1].mass_frac = 0.22;
-    
-    // Сечение 3 (mid)
-    sections[2].r = 0.036;
-    sections[2].r_ratio = 0.53;
-    sections[2].chord = 0.022;
-    sections[2].s = 2.0 * PI * sections[2].r / NUM_BLADES;
-    sections[2].sigma = sections[2].chord / sections[2].s;
-    sections[2].mass_frac = 0.28;
-    
-    // Сечение 4
-    sections[3].r = 0.048;
-    sections[3].r_ratio = 0.71;
-    sections[3].chord = 0.024;
-    sections[3].s = 2.0 * PI * sections[3].r / NUM_BLADES;
-    sections[3].sigma = sections[3].chord / sections[3].s;
-    sections[3].mass_frac = 0.25;
-    
-    // Сечение 5 (tip)
-    sections[4].r = 0.062;
-    sections[4].r_ratio = 0.91;
-    sections[4].chord = 0.024;
-    sections[4].s = 2.0 * PI * sections[4].r / NUM_BLADES;
-    sections[4].sigma = sections[4].chord / sections[4].s;
-    sections[4].mass_frac = 0.15;
+// Сечение 1 (ближнее к хабу)
+sections[0].r = 0.0105;             // ~10.5 мм (r_ratio = 0.31)
+sections[0].r_ratio = sections[0].r / TIP_RADIUS;
+sections[0].chord = 0.020;
+sections[0].s = 2.0 * PI * sections[0].r / NUM_BLADES;
+sections[0].sigma = sections[0].chord / sections[0].s;
+sections[0].mass_frac = 0.10;
+
+// Сечение 2
+sections[1].r = 0.016;             // ~16 мм (r_ratio = 0.47)
+sections[1].r_ratio = sections[1].r / TIP_RADIUS;
+sections[1].chord = 0.022;
+sections[1].s = 2.0 * PI * sections[1].r / NUM_BLADES;
+sections[1].sigma = sections[1].chord / sections[1].s;
+sections[1].mass_frac = 0.22;
+
+// Сечение 3 (mid)
+sections[2].r = 0.0204;            // ~20.4 мм (r_ratio = 0.60)
+sections[2].r_ratio = sections[2].r / TIP_RADIUS;
+sections[2].chord = 0.024;
+sections[2].s = 2.0 * PI * sections[2].r / NUM_BLADES;
+sections[2].sigma = sections[2].chord / sections[2].s;
+sections[2].mass_frac = 0.28;
+
+// Сечение 4
+sections[3].r = 0.027;             // ~27 мм (r_ratio = 0.79)
+sections[3].r_ratio = sections[3].r / TIP_RADIUS;
+sections[3].chord = 0.026;
+sections[3].s = 2.0 * PI * sections[3].r / NUM_BLADES;
+sections[3].sigma = sections[3].chord / sections[3].s;
+sections[3].mass_frac = 0.25;
+
+// Сечение 5 (tip)
+sections[4].r = 0.034;             // 34 мм (r_ratio = 1.00)
+sections[4].r_ratio = sections[4].r / TIP_RADIUS;
+sections[4].chord = 0.026;
+sections[4].s = 2.0 * PI * sections[4].r / NUM_BLADES;
+sections[4].sigma = sections[4].chord / sections[4].s;
+sections[4].mass_frac = 0.15;
     
     return sections;  // ← эта строка важна!
 }
@@ -299,8 +304,8 @@ int main() {
     
     // Расчёт теплоперепада на сопловом аппарате
     double delta_h_total = calc_total_enthalpy_drop();
-    double delta_h_stator = delta_h_total * 0.45;  // БОЛЬШЕ ДОЛЯ УЛИТКИ (лучше геометрия)
-    double delta_h_rotor  = delta_h_total * 0.55;  // на колесо
+    double delta_h_stator = delta_h_total * 0.52;  // БОЛЬШЕ ДОЛЯ УЛИТКИ (лучше геометрия)
+    double delta_h_rotor  = delta_h_total * 0.48;  // на колесо
     
     std::cout << "Stator enthalpy drop: " << delta_h_stator / 1000.0 << " kJ/kg" << std::endl;
     
