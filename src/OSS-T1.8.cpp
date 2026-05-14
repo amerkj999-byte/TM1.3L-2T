@@ -671,7 +671,7 @@ cable_segment(f, pipe3_mid, pipe3_end, pipe3_r, 18);
     // ======================================================================
     float intake_x = 0.02f;
     float intake_r = 0.020f;
-    float intake_y = 0.19f;  // подняли ресивер
+    float intake_y = 0.30f;  // подняли ресивер
     float tailpipe_r = 0.018f;                          // 36 мм диаметр
     float piezo_valve_x = intake_x + 0.050f;
     P als_valve_pos = {piezo_valve_x + 0.040f, 0.190f, intake_z_offset};
@@ -774,9 +774,9 @@ cable_segment(f, pipe3_mid, pipe3_end, pipe3_r, 18);
 
     // Обход увеличенной турбины: смещаемся по Z в сторону от компрессора
     P rct_start  = {rct_valve_x + 0.022f, rct_valve_y, rct_valve_z};
-    P rct_zout   = {rct_start.x + 0.050f, rct_start.y - 0.030f, rct_start.z + 0.080f};  // уходим по Z
-    P rct_clear  = {rct_zout.x + 0.150f, rct_zout.y - 0.080f, rct_zout.z + 0.020f};    // прошли турбину
-    P rct_return = {rct_clear.x + 0.080f, rct_clear.y - 0.050f, rct_clear.z - 0.060f}; // возвращаемся к центру
+    P rct_zout   = {rct_start.x + 0.060f, rct_start.y - 0.050f, rct_start.z + 0.130f};  // Сильнее вбок по Z
+    P rct_clear  = {rct_zout.x + 0.180f, rct_zout.y - 0.120f, rct_zout.z + 0.010f};    // Дальше и ниже
+    P rct_return = {rct_clear.x + 0.100f, rct_clear.y - 0.070f, rct_clear.z - 0.090f}; // Возврат с запасом
     P rct_mid2   = {rct_return.x + 0.100f, rct_return.y - 0.040f, rct_return.z - 0.040f};
     P rct_mid3   = {rct_mid2.x + 0.180f, rct_mid2.y - 0.020f, rct_mid2.z + 0.050f};
     P rct_end    = {rct_mid3.x + 0.120f, rct_mid3.y + 0.030f, rct_mid3.z + 0.050f};
@@ -1098,8 +1098,8 @@ cylinder_hollow(f, lp_exit_x - 0.008f, lp_exit_x + 0.008f, 0.040f, 0.032f, 20, t
 // ======================================================================
 // 8. ИНТЕРКУЛЕР Stage 2 (LP компрессор → интеркулер → HP компрессор)
 // ======================================================================
-float ic_x = hp_comp_x - 0.10f;      // интеркулер перед HP компрессором
-float ic_y = 0.18f;                  // высота интеркулера
+float ic_x = hp_comp_x + 0.05f;  // 0.58 — ПОСЛЕ HP КОМПРЕССОРА
+float ic_y = 0.26f;              // ВЫШЕ — над турбиной
 float ic_z = intake_z_offset;        // Z от впуска
 
 // Выход LP компрессора
@@ -1126,11 +1126,21 @@ for(float t : {0.0f, 0.003f}) {
     fct(f, ic2, ic6, ic7); fct(f, ic2, ic7, ic3);
 }
 
-// Трубопровод: выход LP компрессора → вход интеркулера
-cable_segment(f, {lp_comp_out_x_final, turbo_end.y, turbo_end.z}, {ic_x, ic_y, ic_z}, 0.015f);
+// Трубопровод: выход LP компрессора → обход HP турбины снизу → вход интеркулера
+cable_segment(f, {lp_comp_out_x_final, turbo_end.y, turbo_end.z}, 
+              {lp_comp_out_x_final + 0.02f, -0.12f, turbo_end.z}, 0.015f);  // нырок вниз
+cable_segment(f, {lp_comp_out_x_final + 0.02f, -0.12f, turbo_end.z}, 
+              {ic_x, -0.12f, ic_z}, 0.015f);  // под турбиной
+cable_segment(f, {ic_x, -0.12f, ic_z}, 
+              {ic_x, ic_y, ic_z}, 0.015f);  // подъём к интеркулеру
 
-// Трубопровод: выход интеркулера → вход HP компрессора
-cable_segment(f, {ic_x + 0.15f, ic_y, ic_z}, {hp_comp_in_x, turbo_end.y, turbo_end.z}, 0.015f);
+// Трубопровод: выход интеркулера → обход HP турбины снизу → вход HP компрессора
+cable_segment(f, {ic_x + 0.15f, ic_y, ic_z}, 
+              {ic_x + 0.15f, -0.12f, ic_z}, 0.015f);  // спуск вниз
+cable_segment(f, {ic_x + 0.15f, -0.12f, ic_z}, 
+              {hp_comp_in_x, -0.12f, turbo_end.z}, 0.015f);  // под турбиной
+cable_segment(f, {hp_comp_in_x, -0.12f, turbo_end.z}, 
+              {hp_comp_in_x, turbo_end.y, turbo_end.z}, 0.015f);  // подъём к HP
     
     // ======================================================================
     // 9. ВПУСКНАЯ СИСТЕМА (ресивер поднят: 0.19f вместо 0.11f)
