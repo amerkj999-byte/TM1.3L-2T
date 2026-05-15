@@ -30,7 +30,7 @@ Requires C++17 or later. No external dependencies.
 
 | Parameter | Value |
 |-----------|-------|
-| **Peak system power** | **435 kW (584 HP)** |
+| **Peak system power** | **431 kW (587 HP)** |
 | Engine power (crankshaft) | 382 kW (512 WHP) @ 10,700 RPM |
 | Reactive thrust (static) | **810 N** (82.6 kgf) @ 0 km/h |
 | Reactive thrust @ 250 km/h | **673 N** (68.6 kgf) — 46.7 kW (63.5 HP) |
