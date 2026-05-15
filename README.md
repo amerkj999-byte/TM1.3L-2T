@@ -38,7 +38,7 @@ Requires C++17 or later. No external dependencies.
 | Specific output | **400 HP/liter** |
 | Weight (engine + gearbox) | ~195 kg |
 | Power-to-weight ratio | 0.38 kg/HP |
-| Fuel | 65% Methanol + 34.5% AI-100 + 0.5% Bardahl (M65 blend) |
+| Fuel | 65% Methanol + 32.5% AI-100 + 2.5% Bardahl KXT Racing (M65 blend) |
 | Trapping efficiency | **58.0%-40.0%** (2D CFD-verified, two-chamber Helmholtz resonator) |
 | Peak EGT | 1,150°C |
 | Max boost | 4.62 bar (absolute) |
