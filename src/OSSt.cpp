@@ -1155,11 +1155,12 @@ if (step % 500 == 0) { // Только раз в 0.1 сек
             }
     }
             
-            // ==========================================
-            // 5. ТОПЛИВОПОДАЧА С ПИД
-            // ==========================================
-            double rho_air_local = boost / (R_AIR * atmos.temperature);
-// Нелинейная VE-карта: пик на 8000-8500 об/мин, провал на 5000-6000
+// ==========================================
+// 5. ТОПЛИВОПОДАЧА — ФОРСИРОВАННАЯ ЛЯМБДА 0.45
+// ==========================================
+double rho_air_local = boost / (R_AIR * atmos.temperature);
+
+// Нелинейная VE-карта
 double rpm_norm = rpm / 11000.0;
 double boost_bar = (boost - atmos.pressure) / 1e5;
 double ve_peak = 0.58 + 0.40 * exp(-pow((rpm_norm - 0.88) / 0.12, 2.0));
@@ -1167,97 +1168,118 @@ double ve_boost_factor = 1.0 + 0.18 * boost_bar * (1.0 - fabs(rpm_norm - 0.88) *
 ve_boost_factor = std::max(0.85, std::min(1.35, ve_boost_factor));
 double vol_eff_local = ve_peak * ve_boost_factor;
 vol_eff_local = std::max(0.40, std::min(1.05, vol_eff_local));
-            double m_dot_air = DISPLACEMENT * (rpm / 60.0) * rho_air_local * vol_eff_local * SCAV_EFF;
+double m_dot_air = DISPLACEMENT * (rpm / 60.0) * rho_air_local * vol_eff_local * SCAV_EFF;
 
-            double max_fuel_by_air = m_dot_air / (AFR_STOICH_BLEND * 0.45);  // λ ≥ 0.45
-if (fuel_demand > max_fuel_by_air) {
-    fuel_demand = max_fuel_by_air;
+// ===== ЦЕЛЕВАЯ ЛЯМБДА (ПРИОРИТЕТ: НАДДУВ > ДРОССЕЛЬ) =====
+double lambda_target;
+
+if (boost_bar > 3.0)                lambda_target = 0.45;  // Боевой режим
+else if (boost_bar > 2.0)           lambda_target = 0.50;  // Высокий наддув
+else if (boost_bar > 1.0)           lambda_target = 0.58;  // Средний наддув
+else if (boost_bar > 0.5)           lambda_target = 0.70;  // Низкий наддув
+else if (driver_throttle > 0.95)    lambda_target = 0.65;  // Форсаж атмо
+else if (driver_throttle > 0.85)    lambda_target = 0.72;  // Мощность атмо
+else if (driver_throttle > 0.70)    lambda_target = 0.87;  // Спорт
+else if (driver_throttle > 0.50)    lambda_target = 0.93;  // Круиз
+else if (driver_throttle > 0.20)    lambda_target = 0.98;  // Эконом
+else                                 lambda_target = 1.00;  // Холостой
+
+// Форсаж на полном газу — всегда 0.45
+if (driver_throttle > 0.95 && rpm > 5000.0) {
+    lambda_target = 0.45;
 }
-            
-            double lambda_target = 1.0;
-if (driver_throttle > 0.95)      lambda_target = 0.65;  // Форсаж
-else if (driver_throttle > 0.85) lambda_target = 0.72;  // Мощность
-else if (driver_throttle > 0.70) lambda_target = 0.87;  // Спорт
-else if (driver_throttle > 0.50) lambda_target = 0.93;  // Круиз
-else if (driver_throttle > 0.20) lambda_target = 0.98;  // Эконом
-else                             lambda_target = 1.0;   // Холостой
+
 double AFR_target = AFR_STOICH_BLEND * lambda_target;
-            
-            double fuel_needed = m_dot_air / AFR_target;
-            double rpm_error = target_rpm - rpm;
-            
-            // Адаптивные коэффициенты ПИД
-            double Kp = (driver_throttle > 0.7) ? 0.0030 : 0.0015;
-            double Ki = (driver_throttle > 0.7) ? 0.0015 : 0.0008;
-            
-            rpm_error_integral += rpm_error * dt;
-            rpm_error_integral = std::max(-2.0, std::min(2.0, rpm_error_integral));
-            
-            // Сброс интегратора при смене режима
-            if (fabs(rpm_error) > 2000.0 || driver_throttle < 0.02) {
-                rpm_error_integral *= 0.90;
-            }
-            
-            double fuel_correction = rpm_error * Kp + rpm_error_integral * Ki;
 
-            // Принудительное ограничение скважности
-if (fuel_demand > 0.350) {
-    fuel_demand = 0.350; //  г/с — жёсткий потолок
-}
-// И добавить защиту по времени:
-if (fuel_flow > 0.400 && time_at_max_fuel > 5.0) {
-    fuel_flow *= 0.350; // Плавно снижаем подачу на 5%
+// ===== БАЗОВЫЙ РАСЧЁТ ТОПЛИВА =====
+double fuel_needed = m_dot_air / AFR_target;
+
+// ===== ПИД-КОРРЕКЦИЯ ПО ОБОРОТАМ =====
+double rpm_error = target_rpm - rpm;
+double Kp = (driver_throttle > 0.7) ? 0.0030 : 0.0015;
+double Ki = (driver_throttle > 0.7) ? 0.0015 : 0.0008;
+
+rpm_error_integral += rpm_error * dt;
+rpm_error_integral = std::max(-2.0, std::min(2.0, rpm_error_integral));
+
+if (fabs(rpm_error) > 2000.0 || driver_throttle < 0.02) {
+    rpm_error_integral *= 0.90;
 }
 
-// ===== NaN-ЗАЩИТА ПИД-РЕГУЛЯТОРА =====
-// Если ошибка слишком большая — сбрасываем интегратор
+double fuel_correction = rpm_error * Kp + rpm_error_integral * Ki;
+
+// NaN-защита ПИД
 if (fabs(rpm_error) > 5000.0) {
     rpm_error_integral = 0.0;
-    fuel_correction = rpm_error * Kp; // Только пропорциональная часть
+    fuel_correction = rpm_error * Kp;
 }
 
-// Ограничение коррекции (не более 50% от базовой подачи)
+// Ограничение коррекции (±50% от базовой)
 if (fabs(fuel_correction) > fabs(fuel_needed) * 0.5) {
     fuel_correction = (fuel_correction > 0 ? 1.0 : -1.0) * fabs(fuel_needed) * 0.5;
 }
 
 fuel_demand = fuel_needed + fuel_correction;
 
-// Ограничение скорости нарастания (не более +50% за 0.1 сек)
+// ===== ЖЁСТКАЯ ГАРАНТИЯ ЛЯМБДЫ 0.45 =====
+// Физический предел: не даём уйти выше 0.45 при наддуве
+double min_fuel_045 = m_dot_air / (AFR_STOICH_BLEND * 0.45);
+if (fuel_demand < min_fuel_045) {
+    fuel_demand = min_fuel_045;
+}
+
+// ===== ПРЕДЕЛЫ ФОРСУНОК =====
+double max_fuel_injectors = 0.350;  // 350 г/с макс
+if (fuel_demand > max_fuel_injectors) {
+    fuel_demand = max_fuel_injectors;
+}
+
+// Защита по времени максимальной подачи
+static double time_at_max_fuel = 0.0;
+if (fuel_demand >= max_fuel_injectors * 0.95) {
+    time_at_max_fuel += dt;
+    if (time_at_max_fuel > 5.0) {
+        fuel_demand = max_fuel_injectors * 0.85;  // Снижаем после 5 сек
+    }
+} else {
+    time_at_max_fuel *= 0.99;  // Медленный сброс таймера
+}
+
+// ===== ОГРАНИЧЕНИЕ СКОРОСТИ НАРАСТАНИЯ =====
 static double prev_fuel_demand = 0.0;
-double max_delta = 0.020 * dt / 0.1;  // макс +20 г/с за 0.1 сек
+double max_delta = 0.040 * dt / 0.1;  // +40 г/с за 0.1 сек
 if (fuel_demand > prev_fuel_demand + max_delta) {
     fuel_demand = prev_fuel_demand + max_delta;
 }
 prev_fuel_demand = fuel_demand;
 
-// Защита от отрицательных и NaN значений
+// ===== ЗАЩИТА ОТ NaN =====
 if (std::isnan(fuel_demand) || std::isinf(fuel_demand) || fuel_demand < 0.0) {
     fuel_demand = (driver_throttle < 0.02) ? 0.0 : driver_throttle * 0.030;
     rpm_error_integral = 0.0;
 }
-            
-            // Ограничения по подаче топлива
-            double fuel_min = (driver_throttle < 0.02) ? 0.0004 : driver_throttle * 0.004;
-            double fuel_max = driver_throttle * 0.400;  
-            
-            if (!engine_running && rpm < 400.0 && t < 2.0) {
-                fuel_demand = 0.0015;  // Пусковая подача
-            } else if (driver_throttle < 0.02 && rpm > 2000.0) {
-                fuel_demand = 0.0;     // Принудительный сброс газа
-                rpm_error_integral = 0.0;
-            } else {
-                fuel_demand = std::max(fuel_min, std::min(fuel_max, fuel_demand));
-            }
-            
-            // Отсечка по оборотам
-            if (rpm > RPM_MAX) fuel_demand *= 0.25;
-            if (rpm > RPM_MAX * 1.03) fuel_demand = 0.0;
-            
-            // Фильтр подачи топлива
-            double fuel_tau = 0.005;
-            double fuel_alpha = dt / (fuel_tau + dt);
-            fuel_flow = fuel_flow * (1.0 - fuel_alpha) + fuel_demand * fuel_alpha;
+
+// ===== МИНИМАЛЬНАЯ/МАКСИМАЛЬНАЯ ПОДАЧА =====
+double fuel_min = (driver_throttle < 0.02) ? 0.0004 : driver_throttle * 0.004;
+double fuel_max = driver_throttle * 0.400;
+
+if (!engine_running && rpm < 400.0 && t < 2.0) {
+    fuel_demand = 0.0015;  // Пусковая
+} else if (driver_throttle < 0.02 && rpm > 2000.0) {
+    fuel_demand = 0.0;     // Принудительный сброс
+    rpm_error_integral = 0.0;
+} else {
+    fuel_demand = std::max(fuel_min, std::min(fuel_max, fuel_demand));
+}
+
+// ===== ОТСЕЧКА ПО ОБОРОТАМ =====
+if (rpm > RPM_MAX) fuel_demand *= 0.25;
+if (rpm > RPM_MAX * 1.03) fuel_demand = 0.0;
+
+// ===== ФИЛЬТР ПОДАЧИ =====
+double fuel_tau = 0.005;
+double fuel_alpha = dt / (fuel_tau + dt);
+fuel_flow = fuel_flow * (1.0 - fuel_alpha) + fuel_demand * fuel_alpha;
 
                         // ==========================================
             // 5.5. ДЕТОНАЦИОННЫЙ КОНТРОЛЬ
