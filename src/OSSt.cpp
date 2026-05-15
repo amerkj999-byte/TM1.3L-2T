@@ -84,9 +84,9 @@ const double PIEZO_MAX_TRAVEL   = 0.008;// м
 const double OIL_VOLUME   = 3.5;        // литров
 const double OIL_PUMP_DISPL = 12.0;     // см³/об
 
-// Топливная система (E-TEC прямой впрыск, 200 бар, анодированная рампа)
-const double INJ_FLOW_MAX = 0.020;      // кг/с на форсунку (20 г/с для метанольной смеси)
-const double FUEL_PRESSURE = 200.0e5;   // Па (200 бар)
+// Топливная система (E-TEC прямой впрыск, 300 бар, анодированная рампа)
+const double INJ_FLOW_MAX = 0.080;      // кг/с на форсунку ( г/с для метанольной смеси)
+const double FUEL_PRESSURE = 300.0e5;   // Па (200 бар)
 
 // ============================================================================
 // ATMOSPHERE (ISA)
@@ -143,9 +143,10 @@ lambda_target = std::max(0.40, std::min(1.0, lambda_target));
     target_AFR = AFR_STOICH_BLEND * lambda_target;
         double m_dot_fuel_needed = m_dot_air / target_AFR;
         
-        // Предел форсунок (3 × 0.35 г/с = 1.05 г/с макс при 100% duty)
-        double m_dot_fuel_max = INJ_FLOW_MAX * CYL_COUNT;
-        double max_duty = 0.95; // 95% duty cycle limit
+        // Предел форсунок ( макс при 100% duty)
+        const int NUM_INJECTORS = 6;
+        double m_dot_fuel_max = INJ_FLOW_MAX * NUM_INJECTORS * 1.225;  // коррекция на 300 бар
+        double max_duty = 0.85; // 95% duty cycle limit
         
         if (m_dot_fuel_needed < m_dot_fuel_max * max_duty) {
             injector_duty = m_dot_fuel_needed / (m_dot_fuel_max + 1e-9);
@@ -1167,6 +1168,11 @@ ve_boost_factor = std::max(0.85, std::min(1.35, ve_boost_factor));
 double vol_eff_local = ve_peak * ve_boost_factor;
 vol_eff_local = std::max(0.40, std::min(1.05, vol_eff_local));
             double m_dot_air = DISPLACEMENT * (rpm / 60.0) * rho_air_local * vol_eff_local * SCAV_EFF;
+
+            double max_fuel_by_air = m_dot_air / (AFR_STOICH_BLEND * 0.45);  // λ ≥ 0.45
+if (fuel_demand > max_fuel_by_air) {
+    fuel_demand = max_fuel_by_air;
+}
             
             double lambda_target = 1.0;
 if (driver_throttle > 0.95)      lambda_target = 0.65;  // Форсаж
@@ -1195,12 +1201,12 @@ double AFR_target = AFR_STOICH_BLEND * lambda_target;
             double fuel_correction = rpm_error * Kp + rpm_error_integral * Ki;
 
             // Принудительное ограничение скважности
-if (fuel_demand > 0.0177) {
-    fuel_demand = 0.177; //  г/с — жёсткий потолок
+if (fuel_demand > 0.350) {
+    fuel_demand = 0.350; //  г/с — жёсткий потолок
 }
 // И добавить защиту по времени:
-if (fuel_flow > 0.050 && time_at_max_fuel > 5.0) {
-    fuel_flow *= 0.95; // Плавно снижаем подачу на 5%
+if (fuel_flow > 0.400 && time_at_max_fuel > 5.0) {
+    fuel_flow *= 0.350; // Плавно снижаем подачу на 5%
 }
 
 // ===== NaN-ЗАЩИТА ПИД-РЕГУЛЯТОРА =====
@@ -1217,6 +1223,14 @@ if (fabs(fuel_correction) > fabs(fuel_needed) * 0.5) {
 
 fuel_demand = fuel_needed + fuel_correction;
 
+// Ограничение скорости нарастания (не более +50% за 0.1 сек)
+static double prev_fuel_demand = 0.0;
+double max_delta = 0.020 * dt / 0.1;  // макс +20 г/с за 0.1 сек
+if (fuel_demand > prev_fuel_demand + max_delta) {
+    fuel_demand = prev_fuel_demand + max_delta;
+}
+prev_fuel_demand = fuel_demand;
+
 // Защита от отрицательных и NaN значений
 if (std::isnan(fuel_demand) || std::isinf(fuel_demand) || fuel_demand < 0.0) {
     fuel_demand = (driver_throttle < 0.02) ? 0.0 : driver_throttle * 0.030;
@@ -1225,7 +1239,7 @@ if (std::isnan(fuel_demand) || std::isinf(fuel_demand) || fuel_demand < 0.0) {
             
             // Ограничения по подаче топлива
             double fuel_min = (driver_throttle < 0.02) ? 0.0004 : driver_throttle * 0.004;
-            double fuel_max = driver_throttle * 0.065;  // до 12 г/с на полном газу
+            double fuel_max = driver_throttle * 0.400;  
             
             if (!engine_running && rpm < 400.0 && t < 2.0) {
                 fuel_demand = 0.0015;  // Пусковая подача
@@ -1237,7 +1251,8 @@ if (std::isnan(fuel_demand) || std::isinf(fuel_demand) || fuel_demand < 0.0) {
             }
             
             // Отсечка по оборотам
-            if (rpm > RPM_MAX) fuel_demand = 0.0;
+            if (rpm > RPM_MAX) fuel_demand *= 0.25;
+            if (rpm > RPM_MAX * 1.03) fuel_demand = 0.0;
             
             // Фильтр подачи топлива
             double fuel_tau = 0.005;
@@ -1295,8 +1310,8 @@ if (std::isnan(fuel_flow) || std::isinf(fuel_flow)) {
     fuel_flow = 0.001; // Сброс до холостого
 }
 
-if (fuel_flow > 0.100) { // Физический предел 100 г/с (три форсунки по 33 г/с)
-    fuel_flow = 0.065;   // Отсечка по максимуму
+if (fuel_flow > 0.400) { // Физический предел
+    fuel_flow = 0.350;   // Отсечка по максимуму
 }
             // Детект аномального роста T4 — отключение ALS
             if (T4_actual > 1473.0 && als_continuous_seconds > 3.0) {
@@ -1311,6 +1326,14 @@ if (fuel_flow > 0.100) { // Физический предел 100 г/с (три 
                 spark_advance -= 5.0;
                 spark_advance = std::max(5.0, spark_advance);
             }
+double min_AFR = 3.5;  // минимальный AFR (λ≈0.35)
+if (fuel_flow > 0.0 && m_dot_air > 0.0) {
+    double current_AFR = m_dot_air / fuel_flow;
+    if (current_AFR < min_AFR) {
+        fuel_flow = m_dot_air / min_AFR;
+        fuel_demand = fuel_flow;  // сбросить PID в реальность
+    }
+}
 
 if (rpm > 50.0 && fuel_flow > 0.00001) {
     thermo.spark_advance_local = spark_advance;
@@ -1318,6 +1341,18 @@ if (rpm > 50.0 && fuel_flow > 0.00001) {
             // Расчёт ресурса
             calculate_fatigue(dt, thermo.P_peak, thermo.T_peak, T_oil_actual - 273.15, 
                               rpm, anti_lag_active, boost);
+
+// После thermo.compute(), проверка на пропуски зажигания:
+static int misfire_count = 0;
+if (thermo.lambda < 0.38 && rpm > 5000.0) {
+    misfire_count++;
+    if (misfire_count > 3) {
+        fuel_flow *= 0.5;  // резко обедняем
+        misfire_count = 0;
+    }
+} else {
+    misfire_count = 0;
+}
 
 } else {
     thermo.indicated_power = 0.0;
