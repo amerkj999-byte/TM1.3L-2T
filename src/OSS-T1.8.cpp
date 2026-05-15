@@ -12,7 +12,6 @@ struct P { float x, y, z; };
 P lerp(P a, P b, float t) {
     return {a.x + (b.x-a.x)*t, a.y + (b.y-a.y)*t, a.z + (b.z-a.z)*t};
 }
-
 void fct(std::ostream& f, P p1, P p2, P p3) {
     f << "facet normal 0 0 0\n outer loop\n"
       << " vertex " << p1.x << " " << p1.y << " " << p1.z << "\n"
@@ -454,6 +453,9 @@ int main() {
         float inj_x = deck_height + 0.025f;
         cylinder_hollow(f, inj_x - 0.005f, inj_x + 0.035f, 0.012f, 0.008f, 12, 0.030f, cz);
         bolt(f, {inj_x + 0.035f, 0.030f, cz}, 0.010f, 0.025f);
+
+        cylinder_hollow(f, inj_x - 0.005f, inj_x + 0.035f, 0.012f, 0.008f, 12, 0.030f, cz + 0.015f);
+        bolt(f, {inj_x + 0.035f, 0.030f, cz + 0.015f}, 0.010f, 0.025f);
         
         // Высоковольтный провод
         cylinder_hollow(f, head_x + head_h + 0.015f, head_x + head_h + 0.065f, 0.007f, 0.004f, 12, 0, cz);
@@ -1151,11 +1153,20 @@ cable_segment(f, {hp_comp_in_x, -0.12f, turbo_end.z},
     
     // Топливная рампа
     float rail_x = 0.05f, rail_y = deck_height + 0.095f, rail_z = 0.0f;
-    cylinder_hollow(f, rail_x - 0.120f, rail_x + 0.120f, 0.010f, 0.006f, 16, rail_y, rail_z);
+    cylinder_hollow(f, rail_x - 0.140f, rail_x + 0.140f, 0.014f, 0.008f, 16, rail_y, rail_z);
     for(int c = 0; c < 3; c++) {
         cable_segment(f, {rail_x + cyl_z[c]*0.8f, rail_y, rail_z}, 
                       {deck_height + 0.035f, 0.030f, cyl_z[c]}, 0.004f, 8);
     }
+
+    for(int c = 0; c < 3; c++) {
+    // К форсунке №1
+    cable_segment(f, {rail_x + cyl_z[c]*0.8f, rail_y, rail_z}, 
+                  {deck_height + 0.035f, 0.030f, cyl_z[c]}, 0.004f, 8);
+    // К форсунке №2
+    cable_segment(f, {rail_x + cyl_z[c]*0.8f, rail_y, rail_z}, 
+                  {deck_height + 0.035f, 0.030f, cyl_z[c] + 0.015f}, 0.004f, 8);
+}
     
     cylinder_hollow(f, piezo_valve_x - 0.015f, piezo_valve_x + 0.015f, 0.025f, 0.018f, 16, 0.270f, intake_z_offset);
     bolt(f, {piezo_valve_x, 0.275f, intake_z_offset}, 0.010f, 0.025f);
@@ -1505,7 +1516,7 @@ cable_segment(f, {hp_comp_in_x, -0.12f, turbo_end.z},
     bolt(f, {bracket_x, bracket_y, bracket_z + 0.020f}, 0.004f, 0.020f);
 
     // --- ТОПЛИВНАЯ МАГИСТРАЛЬ ВД (220 бар, Ø6 мм внутр.) ---
-    float pipe_r = 0.005f;
+    float pipe_r = 0.006f;
     float rear_z = -0.25f;
     float bulkhead_x = -0.180f;
     float bulkhead_y = hpfp_y + 0.045f;
