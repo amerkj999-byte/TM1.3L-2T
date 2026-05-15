@@ -32,20 +32,51 @@ Requires C++17 or later. No external dependencies.
 |-----------|-------|
 | **Peak system power** | **435 kW (584 HP)** |
 | Engine power (crankshaft) | 382 kW (512 WHP) @ 10,700 RPM |
-| Reactive thrust | 70N @ 250 km/h (6.5 HP equivalent at peak) |
+| Reactive thrust (static) | **810 N** (82.6 kgf) @ 0 km/h |
+| Reactive thrust @ 250 km/h | **673 N** (68.6 kgf) — 46.7 kW (63.5 HP) |
+| Reactive thrust @ 300 km/h | **664 N** (67.7 kgf) — 55.3 kW (75.2 HP) |
 | Torque | 284.0 Nm @ 10,700 RPM |
+| Peak torque | ~450 Nm @ 7,500–8,500 RPM (estimated) |
 | Displacement | 1,296 cm³ |
 | Specific output | **400 HP/liter** |
 | Weight (engine + gearbox) | ~195 kg |
 | Power-to-weight ratio | 0.38 kg/HP |
-| Fuel | 65% Methanol + 32.5% AI-100 + 2.5% Bardahl KXT Racing (M65 blend) |
-| Trapping efficiency | **58.0%-40.0%** (2D CFD-verified, two-chamber Helmholtz resonator) |
+| Fuel | 35% Methanol + 62.5% AI-100 + 2.5% Bardahl KXT Racing (M65 blend) |
+| Trapping efficiency | **58.0% 8500RPM-40.0% 10500RPM** (2D CFD-verified, two-chamber Helmholtz resonator) |
 | Peak EGT | 1,150°C |
 | Max boost | 4.62 bar (absolute) |
 | Lifespan (race mode) | 10–15 hours |
 | Lifespan (endurance) | 300–400 hours |
 
 ---
+## 🚀 REACTIVE THRUST SYSTEM
+
+| Parameter | Value |
+|-----------|-------|
+| Static thrust | **810 N** (82.6 kgf) |
+| Thrust @ 250 km/h | **673 N** (68.6 kgf) |
+| Thrust @ 300 km/h | **664 N** (67.7 kgf) |
+| Jet power @ 300 km/h | **55.3 kW (75.2 HP)** |
+| System weight penalty | ~12 kg (valve + piping + nozzle) |
+| Valve material | C/SiC composite (Schunk Carbon Technology) |
+| Max operating temp | 1,450°C (continuous), 1,600°C (peak) |
+| Control | Heel pressure sensor ("Akkela algorithm") |
+| Homologation | Removable plug for technical inspection ("EXHAUST COOLING — DO NOT TOUCH") |
+
+### Thrust vs Speed
+
+| Speed (km/h) | Thrust (N) | Jet Power (kW) | Jet Power (HP) |
+|-------------|------------|----------------|----------------|
+| 0 | **810** | 0 | 0 |
+| 100 | 762 | 21.2 | 28.8 |
+| 200 | 714 | 39.7 | 54.0 |
+| 250 | **673** | 46.7 | 63.5 |
+| 300 | **664** | 55.3 | 75.2 |
+| 400 | 551 | 61.2 | 83.2 |
+| 500 | 482 | 66.9 | 91.0 |
+| 584 | **430** | 69.7 | 94.8 |
+
+*Calculated from simulation data: m_dot_exhaust = 0.676 kg/s, v_jet = 688 m/s, P_exit = 2.5–3.0 bar, nozzle Ø36 mm.*
 
 ## 📁 REPOSITORY STRUCTURE
 
