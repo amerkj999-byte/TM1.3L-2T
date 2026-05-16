@@ -18,7 +18,7 @@ This project is publicly shared under the **GNU General Public License v3.0 (GPL
 
 **Commercial licensing inquiries:** [amerkj999@gmail.com]
 Work in progress — feedback welcome
-Author: Roman Chernyaev, Moscow Region, Russia.
+Author: Roman Chernyaev, 12 y.o., self-taught, Moscow Region, Russia.
 ![Verification](https://img.shields.io/badge/VERIFIED-0.8%25_deviation-red?style=for-the-badge&logo=github)
 Requires C++17 or later. No external dependencies.
 
