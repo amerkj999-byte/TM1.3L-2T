@@ -99,6 +99,10 @@ Full engine + gearbox assembly: **65,329 triangles**
 
 📦 [Download STL](https://github.com/amerkj999-byte/TM1.3L-2T/blob/main/cad/TURBO_MONSTER_1.3L_TRIPLE.stl)
 
+<p align="center">
+  <img src="preview.png" alt="Turbo Monster 3D" width="800">
+</p>
+
 *Open with: Windows 3D Viewer, ParaView, Blender, MeshLab, or any slicer.*
 
 <details>
