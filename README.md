@@ -92,7 +92,9 @@ Hear the beast in action (synthesized from simulation data):
 
 Full engine + gearbox assembly: **65,329 triangles**
 
-📦 [Download STL](https://github.com/amerkj999-byte/TM1.3L-2T/raw/main/cad/TURBO_MONSTER_1.3L_TRIPLE.stl)
+📦 [Download STL](https://github.com/amerkj999-byte/TM1.3L-2T/blob/main/cad/TURBO_MONSTER_1.3L_TRIPLE.stl)
+
+*Open with: Windows 3D Viewer, ParaView, Blender, MeshLab, or any slicer.*
 
 <details>
 <summary>Click to preview model details</summary>
