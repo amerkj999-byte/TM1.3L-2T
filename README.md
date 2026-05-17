@@ -78,6 +78,38 @@ Requires C++17 or later. No external dependencies.
 
 *Calculated from simulation data: m_dot_exhaust = 0.676 kg/s, v_jet = 688 m/s, P_exit = 2.5–3.0 bar, nozzle Ø36 mm.*
 
+## 🔊 Engine Sound
+
+Hear the beast in action (synthesized from simulation data):
+
+| File | Description | Duration |
+|------|-------------|----------|
+| [🎵 Full 22-second profile](https://github.com/amerkj999-byte/TM1.3L-2T/raw/main/audio/turbo_monster_full_22sec.wav) | Complete dynamic run: idle → full throttle → ALS → dead pedal | 22s |
+*44100 Hz, 16-bit stereo WAV. Best with headphones or subwoofer.*
+
+## 🧊 3D Model
+
+Full engine + gearbox assembly: **65,329 triangles**
+
+📦 [Download STL](https://github.com/amerkj999-byte/TM1.3L-2T/raw/main/cad/TURBO_MONSTER_1.3L_TRIPLE.stl)
+
+<details>
+<summary>Click to preview model details</summary>
+
+| Component | Included |
+|-----------|----------|
+| 3 cylinders with scavenging/exhaust windows | ✅ |
+| Compound turbo (LP GTX3582R + HP GTX3071R) | ✅ |
+| Intercooler | ✅ |
+| 4-speed sequential dog box | ✅ |
+| Dual-chamber Helmholtz resonator | ✅ |
+| Reactive thrust system (C/SiC valve) | ✅ |
+| ALS injector with oil cooling jacket | ✅ |
+| HPFP + fuel rail + injectors | ✅ |
+| Radiator + oil cooler | ✅ |
+
+</details>
+
 ## 📁 REPOSITORY STRUCTURE
 
 - `docs/` — Full technical documentation (PDF/Markdown): materials, tolerances, thermal clearances, assembly torques, manufacturing processes
