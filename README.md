@@ -20,6 +20,11 @@ This project is publicly shared under the **GNU General Public License v3.0 (GPL
 Work in progress — feedback welcome
 Author: Roman Chernyaev, 12 y.o., self-taught, Moscow Region, Russia.
 ![Verification](https://img.shields.io/badge/VERIFIED-0.8%25_deviation-red?style=for-the-badge&logo=github)
+![Power](https://img.shields.io/badge/POWER-607%20HP-red?style=for-the-badge)
+![Boost](https://img.shields.io/badge/BOOST-4.62%20bar-orange?style=for-the-badge)
+![Lambda](https://img.shields.io/badge/LAMBDA-0.45-critical?style=for-the-badge)
+![RPM](https://img.shields.io/badge/RPM-12%2C500-blue?style=for-the-badge)
+![Thrust](https://img.shields.io/badge/THRUST-673N%20%40%20250km%2Fh-yellow?style=for-the-badge)
 Requires C++17 or later. No external dependencies.
 
 ---
