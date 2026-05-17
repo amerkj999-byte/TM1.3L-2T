@@ -84,7 +84,7 @@ Hear the beast in action (synthesized from simulation data):
 
 | File | Download |
 |------|----------|
-| 🎵 Full 22-second profile | [WAV](https://github.com/amerkj999-byte/TM1.3L-2T/raw/main/audio/turbo_monster_full_22sec.wav) |
+| 🎵 Full 22-second profile | [Download](https://github.com/amerkj999-byte/TM1.3L-2T/blob/main/audio/turbo_monster_full_22sec.wav) |
 
 *44100 Hz, 16-bit stereo WAV. Best with headphones or subwoofer.*
 
