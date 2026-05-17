@@ -79,10 +79,13 @@ Requires C++17 or later. No external dependencies.
 *Calculated from simulation data: m_dot_exhaust = 0.676 kg/s, v_jet = 688 m/s, P_exit = 2.5–3.0 bar, nozzle Ø36 mm.*
 
 ## 🔊 Engine Sound
+
 Hear the beast in action (synthesized from simulation data):
+
 | File | Download |
 |------|----------|
-| 🎵 Full 22-second profile | [WAV](https://github.com/amerkj999-byte/TM1.3L-2T/raw/main/audio/turbo_monster_full_22sec.wav) ||
+| 🎵 Full 22-second profile | [WAV](https://github.com/amerkj999-byte/TM1.3L-2T/raw/main/audio/turbo_monster_full_22sec.wav) |
+
 *44100 Hz, 16-bit stereo WAV. Best with headphones or subwoofer.*
 
 ## 🧊 3D Model
